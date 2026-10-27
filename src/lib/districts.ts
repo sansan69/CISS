@@ -1,4 +1,5 @@
-import { REGION_CODE } from "@/lib/runtime-config";
+import { REGION_CODE, REGION_NAME } from "@/lib/runtime-config";
+import { INDIA_STATE_DISTRICTS } from "@/lib/region-wizard";
 
 export const KERALA_DISTRICTS = [
   "Thiruvananthapuram",
@@ -307,10 +308,32 @@ export function getDistrictFirestoreQueryValues(value?: string | null) {
   return Array.from(values);
 }
 
-export function getDefaultDistrictSuggestions(regionCode?: string | null) {
-  return (regionCode ?? REGION_CODE).trim().toUpperCase() === "KL"
-    ? [...KERALA_DISTRICTS]
-    : [];
+/**
+ * District suggestions for the deployment's state.
+ *
+ * A regional build always carries REGION_NAME (for example "Tamil Nadu"), so
+ * the onboarding wizard, client/site forms and filters must use that state's
+ * districts instead of the Kerala list. When the resolved region code is KL,
+ * Kerala remains the fallback; an unknown state returns no suggestions rather
+ * than silently offering Kerala districts in another state.
+ */
+export function getRegionDistricts(
+  regionName?: string | null,
+  regionCode?: string | null,
+): string[] {
+  const name = (regionName ?? REGION_NAME).trim();
+  const code = (regionCode ?? REGION_CODE).trim().toUpperCase();
+  const configured = INDIA_STATE_DISTRICTS[name];
+  if (configured?.length) return [...configured];
+  if (code === "KL") return [...KERALA_DISTRICTS];
+  return [];
+}
+
+export function getDefaultDistrictSuggestions(
+  regionCode?: string | null,
+  regionName?: string | null,
+) {
+  return getRegionDistricts(regionName, regionCode);
 }
 
 export function canonicalizeDistrictName(

@@ -8,6 +8,8 @@ import {
   mergeDistrictOptions,
   resolveWorkOrderDistrict,
   resolveKeralaDistrictFromRow,
+  getRegionDistricts,
+  getDefaultDistrictSuggestions,
 } from "./districts";
 
 describe("district aliases", () => {
@@ -81,5 +83,27 @@ describe("district aliases", () => {
   it("canonicalizes district aliases before field-officer matching", () => {
     expect(resolveKeralaDistrictFromRow("Cochin", ["Cochin", "Center A"])).toBe("Ernakulam");
     expect(inferKeralaDistrictFromText("Venue at Calicut")).toBe("Kozhikode");
+  });
+});
+
+
+describe("regional district suggestions", () => {
+  it("lists Tamil Nadu districts for the Tamil Nadu deployment", () => {
+    const districts = getRegionDistricts("Tamil Nadu", "TN");
+    expect(districts).toContain("Chennai");
+    expect(districts).toContain("Coimbatore");
+    expect(districts).toContain("Vellore");
+    expect(districts).toContain("Kanyakumari");
+    expect(districts).toHaveLength(38);
+    expect(getDefaultDistrictSuggestions("TN", "Tamil Nadu")).toEqual(districts);
+    expect(getRegionDistricts("Andhra Pradesh", "AP")).toEqual(
+      expect.arrayContaining(["Tirupati", "NTR", "Anakapalli"]),
+    );
+    expect(getRegionDistricts("Karnataka", "KA")).toContain("Vijayanagara");
+  });
+
+  it("keeps Kerala districts for the Kerala deployment and unknown states empty", () => {
+    expect(getRegionDistricts("Kerala", "KL")).toContain("Thiruvananthapuram");
+    expect(getRegionDistricts("Unknown", "XX")).toEqual([]);
   });
 });

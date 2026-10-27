@@ -315,7 +315,10 @@ export default function BulkImportPage() {
                 // Generate signed badges for all active employees server-side.
                 // Failure to generate a badge must not undo a successful import.
                 try {
-                    await authorizedFetch('/api/admin/qr/regenerate', { method: 'POST' });
+                    const qrResponse = await authorizedFetch('/api/admin/qr/regenerate', { method: 'POST' });
+                    if (!qrResponse.ok) {
+                        console.warn('Post-import QR generation failed; run Settings > QR Code Management.');
+                    }
                 } catch (qrErr) {
                     console.warn('Post-import QR generation failed; run Settings > QR Code Management.', qrErr);
                 }

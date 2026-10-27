@@ -94,7 +94,7 @@ import type { ClientDashboardModule, ClientDashboardModulesConfig } from "@/type
 import type { BatchGeocodeResult } from "@/app/api/admin/sites/batch-geocode/route";
 import { useToast } from "@/hooks/use-toast";
 import { DEFAULT_GEOFENCE_RADIUS_METERS } from "@/lib/constants";
-import { canonicalizeDistrictName, KERALA_DISTRICTS } from "@/lib/districts";
+import { canonicalizeDistrictName, getDefaultDistrictSuggestions } from "@/lib/districts";
 import { buildFirestoreCreateAudit, buildFirestoreUpdateAudit } from "@/lib/firestore-audit";
 import { buildSiteLocationSyncPatch, coordinateStatusLabels, formatCoordinate } from "@/lib/location-utils";
 import { extractSiteCoordinates, hasUsableSiteGps } from "@/lib/site-gps-repair";
@@ -654,7 +654,7 @@ export default function ClientDashboardPage() {
     setSavingSite(true);
     try {
       const coordinatePatch = buildCoordinatePayload(siteForm);
-      const normalizedDistrict = canonicalizeDistrictName(siteForm.district, [...KERALA_DISTRICTS]) || siteForm.district.trim();
+      const normalizedDistrict = canonicalizeDistrictName(siteForm.district, getDefaultDistrictSuggestions()) || siteForm.district.trim();
       if (siteDialog === "create") {
         const normalizedDutyPoints = isOperationalClientName(client?.name)
           ? []
@@ -2045,7 +2045,7 @@ export default function ClientDashboardPage() {
               description="Geocode the address, then click or drag the pin to fine-tune the site position if needed."
             />
             <datalist id="client-site-district-options">
-              {KERALA_DISTRICTS.map((district) => <option key={district} value={district} />)}
+              {getDefaultDistrictSuggestions().map((district) => <option key={district} value={district} />)}
             </datalist>
           </div>
           <DialogFooter className="mt-4">
@@ -2148,7 +2148,7 @@ export default function ClientDashboardPage() {
               description="Geocode the office address and adjust the pin manually if the saved point needs correction."
             />
             <datalist id="client-location-district-options">
-              {KERALA_DISTRICTS.map((district) => <option key={district} value={district} />)}
+              {getDefaultDistrictSuggestions().map((district) => <option key={district} value={district} />)}
             </datalist>
           </div>
           <DialogFooter className="mt-4">

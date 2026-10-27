@@ -81,9 +81,12 @@ export async function POST(request: Request) {
       failed,
     });
   } catch (error: any) {
-    return unauthorizedResponse(
-      error?.message || "Could not regenerate QR badges.",
-      error?.message === "Admin access required." ? 403 : 500,
-    );
+    const message = error?.message || "Could not regenerate QR badges.";
+    const status = message.includes("Missing bearer token")
+      ? 401
+      : message === "Admin access required."
+        ? 403
+        : 500;
+    return unauthorizedResponse(message, status);
   }
 }

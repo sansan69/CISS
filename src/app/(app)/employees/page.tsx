@@ -30,7 +30,7 @@ import { buildFirestoreAuditEvent, buildFirestoreUpdateAudit } from '@/lib/fires
 import { PageHeader } from '@/components/layout/page-header';
 import { useClients } from '@/lib/hooks/use-clients';
 import type { RegionRecord } from '@/types/region';
-import { KERALA_DISTRICTS } from '@/lib/districts';
+import { getDefaultDistrictSuggestions } from '@/lib/districts';
 import { employeeMatchesAnyDistrict } from '@/lib/employees/visibility';
 import { normalizeEmployeeDocumentFields } from '@/lib/employee-document-fields';
 import { getEmployeeStatusLabel } from '@/lib/constants';
@@ -202,7 +202,7 @@ export default function EmployeeDirectoryPage() {
                 new Set(superAdminResults.map((employee) => employee.district).filter(Boolean)),
             ).sort((a, b) => a.localeCompare(b));
         }
-        return [...KERALA_DISTRICTS];
+        return getDefaultDistrictSuggestions();
     }, [assignedDistricts, superAdminResults, userRole]);
     
     const buildBaseQuery = useCallback(() => {
