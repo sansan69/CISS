@@ -9,11 +9,11 @@ import { Label } from '@/components/ui/label';
 import { CloudArrowUp as UploadCloud, Download, SpinnerGap as Loader2, File as FileCheck2, Warning as AlertTriangle, ListChecks, CheckCircle, CaretLeft as ChevronLeft } from '@phosphor-icons/react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
+import { authorizedFetch } from '@/lib/api-client';
 import { collection, doc, writeBatch, serverTimestamp, Timestamp, query, where, getDocs } from 'firebase/firestore';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import Link from 'next/link';
 import { generateEmployeeId } from '@/lib/employee-id';
-import { generateQrCodeDataUrl } from '@/lib/qr';
 import { PageHeader } from '@/components/layout/page-header';
 import { siteBelongsToClient } from '@/lib/sites/site-directory';
 import {
@@ -283,12 +283,9 @@ export default function BulkImportPage() {
 
                     const employeeId = generateEmployeeId(record.clientName, batchSeed + i);
 
-                    let qrCodeUrl = "";
-                    try {
-                        qrCodeUrl = await generateQrCodeDataUrl(employeeId, record.fullName, record.phoneNumber);
-                    } catch (qrErr) {
-                        console.warn(`QR generation failed for ${record.fullName} — continuing without QR.`, qrErr);
-                    }
+                    // QR signing happens server-side after import; generating it
+                    // in this browser bundle cannot access the HMAC secret.
+                    const qrCodeUrl = "";
 
                     const finalRecord = {
                         ...record,
@@ -312,9 +309,16 @@ export default function BulkImportPage() {
 
                 toast({
                     title: 'Import Successful',
-                    description: `Successfully imported ${validRecords.length} new employees.`,
+                    description: `Successfully imported ${validRecords.length} new employees. Generating QR badges…`,
                     duration: 5000
                 });
+                // Generate signed badges for all active employees server-side.
+                // Failure to generate a badge must not undo a successful import.
+                try {
+                    await authorizedFetch('/api/admin/qr/regenerate', { method: 'POST' });
+                } catch (qrErr) {
+                    console.warn('Post-import QR generation failed; run Settings > QR Code Management.', qrErr);
+                }
                 const successRecords = validRecords.map(data => ({ data, status: 'success', message: 'Successfully imported.'} as ProcessedRecord));
                 setProcessedRecords(prev => [...prev, ...successRecords]);
 

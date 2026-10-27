@@ -11,7 +11,7 @@ import { verifyUploadToken } from "@/lib/server/upload-token";
 export const runtime = "nodejs";
 
 const MAX_ATTENDANCE_PHOTO_BYTES = 5 * 1024 * 1024;
-const UPLOAD_RATE_LIMIT = { maxRequests: 10, windowMs: 60_000 };
+const UPLOAD_RATE_LIMIT = { maxRequests: 120, windowMs: 60_000 };
 
 function isSafeAttendancePath(path: string) {
   return /^employees\/[0-9A-Za-z_-]+\/attendance\/[0-9a-f-]{36}\/photo\.jpg$/i.test(path);
@@ -87,17 +87,52 @@ export async function POST(request: NextRequest) {
     const { buffer, contentType } = parseImageDataUrl(photoDataUrl);
     const bucket = storage.bucket();
     const storageFile = bucket.file(path);
-    const downloadToken = crypto.randomUUID();
 
-    await storageFile.save(buffer, {
-      resumable: false,
-      metadata: {
-        contentType,
+    // Attendance evidence is immutable for an attempt. A queued retry may run
+    // after the first upload succeeded but its response was lost; return the
+    // original object instead of replacing the photo and revoking the URL that
+    // the committed attendance log already points at.
+    const existingResponse = async () => {
+      const [metadata] = await storageFile.getMetadata();
+      const raw = metadata.metadata?.firebaseStorageDownloadTokens;
+      const token = typeof raw === "string" ? raw.split(",")[0] : "";
+      if (!token) return null;
+      return NextResponse.json({
+        url: buildDownloadUrl(bucket.name, path, token),
+        path,
+        reused: true,
+      });
+    };
+
+    const [exists] = await storageFile.exists();
+    if (exists) {
+      const existing = await existingResponse();
+      if (existing) return existing;
+      return NextResponse.json(
+        { error: "Attendance photo already exists but has no download token." },
+        { status: 409 },
+      );
+    }
+
+    const downloadToken = crypto.randomUUID();
+    try {
+      await storageFile.save(buffer, {
+        resumable: false,
+        preconditionOpts: { ifGenerationMatch: 0 },
         metadata: {
-          firebaseStorageDownloadTokens: downloadToken,
+          contentType,
+          metadata: {
+            firebaseStorageDownloadTokens: downloadToken,
+          },
         },
-      },
-    });
+      });
+    } catch (error: any) {
+      if (Number(error?.code) === 412) {
+        const existing = await existingResponse();
+        if (existing) return existing;
+      }
+      throw error;
+    }
 
     return NextResponse.json({
       url: buildDownloadUrl(bucket.name, path, downloadToken),

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
 import { normalizeText } from "@/lib/server/mobile-api-utils";
+import { buildQrContent } from "@/lib/qr/qr-token";
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
@@ -35,19 +36,30 @@ export async function POST(request: NextRequest) {
     const empDoc = empSnap.docs[0];
     const empData = empDoc.data() as Record<string, unknown>;
 
-    // Generate a unique QR data payload
-    const qrData = JSON.stringify({
-      type: "guard",
-      employeeId: normalizeText(empData.employeeId || employeeId),
-      employeeDocId: empDoc.id,
-      guardAuthUid: normalizeText(empData.guardAuthUid),
-    });
+    const qrEmployeeId = normalizeText(empData.employeeId || employeeId);
+    const qrName = normalizeText(empData.fullName || empData.name || "");
+    const qrPhone = normalizeText(
+      empData.phoneNumber || empData.phone || empData.mobile || "",
+    );
+    if (!qrPhone) {
+      return NextResponse.json(
+        {
+          error:
+            "This employee has no phone number, so a signed attendance QR badge cannot be issued.",
+        },
+        { status: 422 },
+      );
+    }
+
+    // The signed content is the same shape the guard app and printed badges
+    // expect. A JSON envelope without Phone/Token is not a valid badge.
+    const qrData = await buildQrContent(qrEmployeeId, qrName, qrPhone);
 
     // Store the QR data reference
     const qrRef = adminDb.collection("qrCodes").doc(empDoc.id);
     await qrRef.set({
       employeeDocId: empDoc.id,
-      employeeId: normalizeText(empData.employeeId || employeeId),
+      employeeId: qrEmployeeId,
       qrData,
       generatedAt: new Date(),
       type: "guard",

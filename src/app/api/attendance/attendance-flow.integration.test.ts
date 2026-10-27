@@ -10,6 +10,7 @@ import { consumeAttendanceProof } from "@/lib/server/attendance-proofs";
 vi.mock("@/lib/server/attendance-proofs", () => ({
   registerAttendanceProof: vi.fn(async () => true),
   consumeAttendanceProof: vi.fn(async () => true),
+  consumeAttendanceProofInTransaction: vi.fn(async () => true),
 }));
 
 type Filter = {
@@ -172,6 +173,10 @@ class FakeTransaction {
   update(ref: FakeDocRef, value: Record<string, unknown>) {
     this.store.updateDoc(ref.collectionName, ref.id, value);
   }
+
+  delete(ref: FakeDocRef) {
+    this.store.deleteDoc(ref.collectionName, ref.id);
+  }
 }
 
 class FakeFirestore {
@@ -200,6 +205,10 @@ class FakeFirestore {
 
   seed(collectionName: string, id: string, value: Record<string, unknown>) {
     this.setDoc(collectionName, id, value);
+  }
+
+  deleteDoc(collectionName: string, id: string) {
+    this.collections.get(collectionName)?.delete(id);
   }
 
   nextId(collectionName: string) {

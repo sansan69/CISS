@@ -140,8 +140,9 @@ describe("public attendance identification", () => {
     expect(body.verificationToken).toEqual(expect.any(String));
   });
 
-  it("refuses employee-ID identification without a signed-in guard", async () => {
+  it("allows employee-ID identification on a legacy kiosk while compatibility is on", async () => {
     vi.stubEnv("ATTENDANCE_VERIFICATION_SECRET", "test-secret");
+    vi.stubEnv("ATTENDANCE_ALLOW_ANONYMOUS_IDENTIFIERS", "true");
     const db = createFirestore([
       {
         id: "employee-doc-1",
@@ -159,7 +160,10 @@ describe("public attendance identification", () => {
       identifyRequest({ method: "employeeId", value: "CISS/TEST/001" }, false),
     );
 
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.found).toBe(true);
+    expect(body.verificationToken).toEqual(expect.any(String));
   });
 
   it("identifies the logged-in guard without issuing a public proof", async () => {
@@ -270,7 +274,9 @@ describe("public attendance identification", () => {
     expect(body.verificationToken).toEqual(expect.any(String));
   });
 
-  it("rejects a QR code that carries no signed token", async () => {
+  it("accepts a legacy unsigned QR badge while compatibility is on", async () => {
+    vi.stubEnv("ATTENDANCE_ALLOW_UNSIGNED_QR", "true");
+    vi.stubEnv("ATTENDANCE_ALLOW_ANONYMOUS_IDENTIFIERS", "true");
     vi.stubEnv("ATTENDANCE_VERIFICATION_SECRET", "test-secret");
     const db = createFirestore([
       {
@@ -297,6 +303,45 @@ describe("public attendance identification", () => {
       ),
     );
 
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.found).toBe(true);
+  });
+});
+
+describe("strict attendance identification", () => {
+  it("rejects tokenless anonymous QR and weak identifiers when compatibility is off", async () => {
+    vi.stubEnv("ATTENDANCE_ALLOW_UNSIGNED_QR", "false");
+    vi.stubEnv("ATTENDANCE_ALLOW_ANONYMOUS_IDENTIFIERS", "false");
+    const db = createFirestore([
+      {
+        id: "employee-doc-1",
+        data: {
+          employeeId: "CISS/TEST/001",
+          fullName: "Test Guard",
+          phoneNumber: "9999999999",
+          status: "Active",
+        },
+      },
+    ]);
+    mockInfrastructure(db);
+
+    const { POST } = await import("./route");
+    const weak = await POST(
+      identifyRequest({ method: "employeeId", value: "CISS/TEST/001" }, false),
+    );
+    expect(weak.status).toBe(401);
+
+    const unsignedQr = await POST(
+      identifyRequest(
+        {
+          method: "qr",
+          value:
+            "CISS-ATTENDANCE\nEmployee ID: CISS/TEST/001\nName: Test Guard\nPhone: 9999999999",
+        },
+        false,
+      ),
+    );
+    expect(unsignedQr.status).toBe(401);
   });
 });

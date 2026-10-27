@@ -18,6 +18,16 @@ import { normalizeClientNameKey, OPERATIONAL_CLIENT_NAME } from "@/lib/constants
 
 export const runtime = "nodejs";
 
+/**
+ * Temporary compatibility switch for the installed app and shared kiosks.
+ * When false, only a signed QR badge can identify a guard without a session.
+ * Set to "false" after every guard has a signed-in device/badge.
+ */
+const ALLOW_ANONYMOUS_IDENTIFIERS =
+  process.env.ATTENDANCE_ALLOW_ANONYMOUS_IDENTIFIERS === "true";
+const ALLOW_UNSIGNED_QR =
+  process.env.ATTENDANCE_ALLOW_UNSIGNED_QR === "true";
+
 const requestSchema = z.discriminatedUnion("method", [
   z.object({ method: z.literal("qr"), value: z.string().trim().min(1).max(4096) }),
   z.object({
@@ -235,7 +245,7 @@ export async function POST(request: Request) {
         { status: 401 },
       );
     }
-    if (input.method !== "qr" && !actor) {
+    if (input.method !== "qr" && !actor && !ALLOW_ANONYMOUS_IDENTIFIERS) {
       return NextResponse.json(
         {
           error:
@@ -248,7 +258,7 @@ export async function POST(request: Request) {
     const ip = getClientIp(request);
     const rateLimit = await checkRateLimit(
       buildRateLimitKey(`attendance-identify-${input.method}`, ip),
-      { maxRequests: 15, windowMs: 60_000, failClosed: true },
+      { maxRequests: 60, windowMs: 60_000, failClosed: true },
     );
     if (!rateLimit.allowed) {
       return NextResponse.json(
@@ -285,16 +295,30 @@ export async function POST(request: Request) {
           { status: 400 },
         );
       }
-      // A QR badge is a credential only when it carries the signed token. A
-      // tokenless QR must not fall through to a free identity proof for any
-      // employee ID printed in the text (the previous fail-open behaviour).
-      if (
-        !qr.token ||
+      // A signed token is preferred. Older printed badges and the employee
+      // detail screen emitted Employee ID + Phone without a token; accept that
+      // shape only while the compatibility switch is on, and never accept a
+      // token that fails verification (that is a tampered badge).
+      if (qr.token) {
+        if (
+          !qr.phoneNumber ||
+          !(await verifyQrToken(qr.employeeId, qr.phoneNumber, qr.token))
+        ) {
+          return NextResponse.json(
+            { error: "This QR code is invalid or has been altered." },
+            { status: 401 },
+          );
+        }
+      } else if (
+        !ALLOW_UNSIGNED_QR ||
         !qr.phoneNumber ||
-        !(await verifyQrToken(qr.employeeId, qr.phoneNumber, qr.token))
+        (!actor && !ALLOW_ANONYMOUS_IDENTIFIERS)
       ) {
         return NextResponse.json(
-          { error: "This QR code is invalid or has been altered." },
+          {
+            error:
+              "This QR badge is unsigned. Ask your office for a new badge or sign in and use your employee ID.",
+          },
           { status: 401 },
         );
       }

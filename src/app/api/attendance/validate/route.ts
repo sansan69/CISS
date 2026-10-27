@@ -91,12 +91,12 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    if (!districtMatches(siteData.district, employeeData.district)) {
-      return NextResponse.json({
-        canSubmit: false,
-        reason: "Site district does not match employee district.",
-      });
-    }
+    // A guard may be deployed outside their home district. Keep the signal for
+    // the admin review, but do not make it a hard preflight failure.
+    const crossDistrictRelief = !districtMatches(
+      siteData.district,
+      employeeData.district,
+    );
 
     // Resolve site coordinates
     const geolocation = siteData.geolocation as { latitude?: number; longitude?: number } | undefined;
@@ -169,6 +169,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       canSubmit: true,
+      crossDistrictRelief,
+      reviewWarnings: crossDistrictRelief
+        ? ["Site district differs from employee district; recorded for review."]
+        : [],
       warnings: {
         outOfZone: isOutOfZone,
         outOfZoneDistance: Math.round(distance),

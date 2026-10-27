@@ -22,8 +22,8 @@ import {
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
 import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, writeBatch, doc, serverTimestamp, Timestamp } from 'firebase/firestore';
-import { generateQrCodeDataUrl } from '@/lib/qr';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { authorizedFetch } from '@/lib/api-client';
 
 export default function QrManagementPage() {
   const [isGenerating, setIsGenerating] = useState(false);
@@ -47,68 +47,35 @@ export default function QrManagementPage() {
   const handleBulkRegenerate = async () => {
     setIsGenerating(true);
     setGenerationStatus('generating');
-    setGenerationProgress(0);
+    setGenerationProgress(10);
 
     try {
-      const snap = await getDocs(query(collection(db, 'employees'), where('status', '==', 'Active')));
-      const total = snap.size;
-      setTotalEmployees(total);
-
-      if (total === 0) {
-        setIsGenerating(false);
-        setGenerationStatus('success');
-        toast({ title: "No Active Employees", description: "There are no active employees to regenerate QR codes for." });
-        return;
+      // Signing happens server-side: the QR HMAC key is not available to the
+      // browser bundle. One route regenerates every active badge in batches.
+      const response = await authorizedFetch('/api/admin/qr/regenerate', {
+        method: 'POST',
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(body.error || 'QR regeneration failed.');
       }
-
-      let processedCount = 0;
-      let successCount = 0;
-      let failCount = 0;
-      const BATCH_SIZE = 500;
-      let batch = writeBatch(db);
-      let opsInBatch = 0;
-
-      for (const docSnap of snap.docs) {
-        try {
-          const data = docSnap.data();
-          const employeeId = data.employeeId || '';
-          const fullName = data.fullName || '';
-          const phoneNumber = data.phoneNumber || '';
-          const qrCodeUrl = await generateQrCodeDataUrl(employeeId, fullName, phoneNumber);
-          batch.update(doc(db, 'employees', docSnap.id), { qrCodeUrl, updatedAt: serverTimestamp() });
-          opsInBatch++;
-          successCount++;
-
-          if (opsInBatch >= BATCH_SIZE) {
-            await batch.commit();
-            batch = writeBatch(db);
-            opsInBatch = 0;
-          }
-        } catch {
-          failCount++;
-        }
-
-        processedCount++;
-        setGenerationProgress(Math.round((processedCount / total) * 100));
-      }
-
-      if (opsInBatch > 0) {
-        await batch.commit();
-      }
-
+      setGenerationProgress(100);
+      setTotalEmployees(body.scanned ?? 0);
       setIsGenerating(false);
-      if (failCount === 0) {
-        setGenerationStatus('success');
-        toast({ title: "Bulk QR Regeneration Successful", description: `QR codes for ${successCount} employees have been updated.` });
-      } else {
-        setGenerationStatus('success');
-        toast({ title: "Bulk QR Regeneration Completed", description: `${successCount} succeeded, ${failCount} failed out of ${total} employees.` });
-      }
-    } catch (err) {
-      console.error("Bulk QR regeneration failed:", err);
+      setGenerationStatus('success');
+      toast({
+        title: 'Bulk QR Regeneration Completed',
+        description: `${body.updated ?? 0} updated, ${body.failed ?? 0} skipped of ${body.scanned ?? 0} active employees.`,
+      });
+    } catch (err: any) {
+      console.error('Bulk QR regeneration failed:', err);
       setIsGenerating(false);
       setGenerationStatus('error');
-      toast({ variant: "destructive", title: "Bulk QR Regeneration Failed", description: "An error occurred during bulk QR code regeneration. Please try again." });
+      toast({
+        variant: 'destructive',
+        title: 'Bulk QR Regeneration Failed',
+        description: err?.message || 'An error occurred during bulk QR code regeneration.',
+      });
     }
   };
 

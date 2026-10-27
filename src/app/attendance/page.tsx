@@ -719,7 +719,6 @@ export default function AttendancePage() {
     setPhotoCompliance(null);
     setPhotoComplianceError(null);
     setReportingStartedAt(null);
-    setLocationCapturedAt(null);
     setLocationError(null);
 
     try {
@@ -728,6 +727,7 @@ export default function AttendancePage() {
         !locationCapturedAt ||
         Date.now() - Date.parse(locationCapturedAt) > 2 * 60 * 1000;
       if (shouldRefreshLocation) {
+        setLocationCapturedAt(null);
         setIsFetchingLocation(true);
         void getDeviceLocation().catch((error: any) => {
           setLocationError(error.message || 'Location could not be captured.');
@@ -913,6 +913,7 @@ export default function AttendancePage() {
   const identifyGuard = useCallback(async (
     method: 'qr' | 'phone' | 'employeeId' | 'authenticated',
     value?: string,
+    options: { preserveToken?: boolean } = {},
   ) => {
     // Send the signed-in guard's token for every method so an assisted
     // submission is attributed to this account. A signed-out kiosk can still
@@ -935,7 +936,9 @@ export default function AttendancePage() {
       throw new Error(responseBody.error || 'Could not identify guard.');
     }
 
-    setAttendanceVerificationToken(responseBody.verificationToken ?? null);
+    if (!options.preserveToken) {
+      setAttendanceVerificationToken(responseBody.verificationToken ?? null);
+    }
     return responseBody.found ? responseBody.employee ?? null : null;
   }, [user]);
 
@@ -1261,6 +1264,7 @@ export default function AttendancePage() {
     employeeDocId: string,
     siteId: string,
     attemptId: string,
+    verificationTokenOverride?: string | null,
   ) => {
     const authToken =
       userRole === 'guard' && user ? await user.getIdToken() : null;
@@ -1275,7 +1279,7 @@ export default function AttendancePage() {
         siteId,
         attemptId,
         attendanceVerificationToken:
-          userRole === 'guard' ? undefined : attendanceVerificationToken,
+          verificationTokenOverride ?? attendanceVerificationToken ?? undefined,
       }),
     });
     const body = await response.json().catch(() => ({}));
@@ -1301,6 +1305,7 @@ export default function AttendancePage() {
       payloadWithoutPhotoUrl.employeeDocId,
       payloadWithoutPhotoUrl.siteId,
       payloadWithoutPhotoUrl.attendanceAttemptId,
+      payloadWithoutPhotoUrl.attendanceVerificationToken,
     );
 
     const uploadResponse = await withRetry(() => fetch('/api/public/attendance/upload', {
@@ -1523,11 +1528,20 @@ export default function AttendancePage() {
     }
 
     const mockLocationRisk = detectMockLocationRisk();
-    const latestEmployee = userRole === 'guard'
-      ? await identifyGuard('authenticated').catch(() => null)
-      : await fetchEmployeeByEmployeeId(
-          scannedEmployee.employeeCode || scannedEmployee.id,
-        ).catch(() => null);
+    // Refresh the subject's hint, but never replace an assisted colleague with
+    // the signed-in guard. A guard marking a colleague keeps the colleague's
+    // identity and the actor-bound proof from the identify step.
+    let latestEmployee: PublicAttendanceEmployeeLookupResponse['employee'] | null = null;
+    if (userRole === 'guard' && scanResult === 'Authenticated guard account') {
+      const self = await identifyGuard('authenticated', undefined, {
+        preserveToken: true,
+      }).catch(() => null);
+      if (self && self.id === scannedEmployee.id) latestEmployee = self;
+    } else if (userRole !== 'guard') {
+      latestEmployee = await fetchEmployeeByEmployeeId(
+        scannedEmployee.employeeCode || scannedEmployee.id,
+      ).catch(() => null);
+    }
     if (latestEmployee) {
       setScannedEmployee(latestEmployee);
       if (selectedStatus === 'Out' && latestEmployee.attendanceHint?.lastStatus !== 'In') {
@@ -1589,8 +1603,7 @@ export default function AttendancePage() {
       deviceInfo: { userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown' },
       clientRequestId: attendanceAttemptId,
       attendanceAttemptId,
-      attendanceVerificationToken:
-        userRole === 'guard' ? undefined : attendanceVerificationToken ?? undefined,
+      attendanceVerificationToken: attendanceVerificationToken ?? undefined,
     };
 
     setIsSubmittingAttendance(true);
@@ -1840,9 +1853,9 @@ export default function AttendancePage() {
                   <div className="grid gap-3 pb-1">
                     {!user && (
                       <p className="rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
-                        Shared device: scan the guard&apos;s QR badge. Employee ID,
-                        phone number and resource ID need a signed-in guard so the
-                        submission can be attributed.
+                        Shared device: scan the guard&apos;s QR badge, or enter the
+                        employee ID/phone number. Sign in first when the submission
+                        should be attributed to your own account.
                       </p>
                     )}
                     <div className="space-y-2">

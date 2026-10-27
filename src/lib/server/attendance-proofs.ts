@@ -42,6 +42,41 @@ export async function registerAttendanceProof(
  * match the submission; a mismatch is treated as an invalid proof and the entry
  * is removed so it cannot be retried.
  */
+/**
+ * Consume a proof inside an existing Firestore transaction.
+ *
+ * Reads must happen before any writes in the caller's transaction; the boolean
+ * is false when the proof is absent or bound to another actor/subject. A caller
+ * should throw on false so the whole transaction aborts and no attendance is
+ * written.
+ */
+export async function consumeAttendanceProofInTransaction(
+  transaction: FirebaseFirestore.Transaction,
+  input: {
+    nonce: string;
+    employeeDocId: string;
+    actorUid: string | null;
+  },
+): Promise<boolean> {
+  const { db } = await import("@/lib/firebaseAdmin");
+  const ref = db.collection(PROOFS_COLLECTION).doc(input.nonce);
+  const snapshot = await transaction.get(ref);
+  if (!snapshot.exists) return false;
+
+  const data = snapshot.data() as Record<string, unknown>;
+  const boundEmployee =
+    typeof data.employeeDocId === "string" ? data.employeeDocId : "";
+  const boundActor =
+    typeof data.actorUid === "string" && data.actorUid ? data.actorUid : null;
+  if (boundEmployee !== input.employeeDocId || boundActor !== input.actorUid) {
+    transaction.delete(ref);
+    return false;
+  }
+
+  transaction.delete(ref);
+  return true;
+}
+
 export async function consumeAttendanceProof(input: {
   nonce: string;
   employeeDocId: string;

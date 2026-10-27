@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
   try {
     const ip = getClientIp(request);
     const key = buildRateLimitKey("public-attendance-token", ip);
-    const { allowed } = await checkRateLimit(key, { maxRequests: 10, windowMs: 60_000 });
+    const { allowed } = await checkRateLimit(key, { maxRequests: 120, windowMs: 60_000 });
     if (!allowed) {
       return NextResponse.json(
         { error: "Too many requests. Please wait." },
@@ -45,10 +45,27 @@ export async function POST(request: NextRequest) {
     if (authorization.startsWith("Bearer ")) {
       const guard = await requireGuard(request);
       if (guard.employeeDocId !== employeeDocId) {
-        return NextResponse.json(
-          { error: "You can only upload your own attendance photo." },
-          { status: 403 },
-        );
+        // Assisted marking: a signed-in guard may upload the colleague's photo
+        // only with a proof minted for this actor and this exact subject.
+        const verificationToken =
+          typeof body?.attendanceVerificationToken === "string"
+            ? body.attendanceVerificationToken
+            : "";
+        const verification =
+          verifyAttendanceVerificationToken(verificationToken);
+        if (
+          !verification ||
+          verification.employeeDocId !== employeeDocId ||
+          verification.actorUid !== guard.uid
+        ) {
+          return NextResponse.json(
+            {
+              error:
+                "Identify the guard again from this phone, then upload the photo.",
+            },
+            { status: 403 },
+          );
+        }
       }
     } else {
       const verificationToken =

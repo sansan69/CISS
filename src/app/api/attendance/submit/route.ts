@@ -39,14 +39,15 @@ import {
   getClientIp,
 } from "@/lib/server/rate-limit";
 import { verifyAttendanceVerificationToken } from "@/lib/server/attendance-verification-token";
-import { consumeAttendanceProof } from "@/lib/server/attendance-proofs";
+import { consumeAttendanceProofInTransaction } from "@/lib/server/attendance-proofs";
 
 export const runtime = "nodejs";
 
 // Firestore-based distributed rate limiting config
 const RATE_LIMIT_CONFIG = {
   authenticated: { maxRequests: 30, windowMs: 60_000 },
-  anonymous: { maxRequests: 5, windowMs: 60_000 },
+  // Shared site kiosks legitimately submit a whole shift change from one IP.
+  anonymous: { maxRequests: 60, windowMs: 60_000 },
   upload: { maxRequests: 10, windowMs: 60_000 },
 };
 
@@ -96,6 +97,13 @@ async function callerOwnsEmployee(
 }
 
 /** Business-logic errors that should return HTTP 400 (not 500). */
+class AttendanceProofError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AttendanceProofError";
+  }
+}
+
 class AttendanceError extends Error {
   constructor(message: string) {
     super(message);
@@ -377,11 +385,18 @@ export async function POST(request: NextRequest) {
         };
       }
     } else {
+      // Compatibility with installed kiosk builds: a signed-in guard is still
+      // preferred, but a genuinely shared device may identify by employee ID,
+      // phone or resource ID while the switch is on. Set
+      // ATTENDANCE_ALLOW_ANONYMOUS_IDENTIFIERS=false to require a badge again.
+      const kioskMethodAllowed =
+        verification?.method === "qr" ||
+        process.env.ATTENDANCE_ALLOW_ANONYMOUS_IDENTIFIERS === "true";
       if (
         !verification ||
         verification.employeeDocId !== payload.employeeDocId ||
         verification.actorUid !== null ||
-        verification.method !== "qr"
+        !kioskMethodAllowed
       ) {
         return NextResponse.json(
           {
@@ -418,22 +433,6 @@ export async function POST(request: NextRequest) {
           duplicate: true,
           message: "Attendance already recorded for this request.",
         });
-      }
-    }
-
-    // Burn the single-use proof only once the request is known not to be a
-    // retry; otherwise a lost response would turn a successful submission into
-    // a 401 on retry.
-    if (proofToConsume) {
-      const consumed = await consumeAttendanceProof(proofToConsume);
-      if (!consumed) {
-        return NextResponse.json(
-          {
-            error:
-              "This identification has already been used or has expired. Identify the guard again.",
-          },
-          { status: 401 },
-        );
       }
     }
 
@@ -537,9 +536,14 @@ export async function POST(request: NextRequest) {
       const siteData = siteSnap.data() as Record<string, any>;
       validateEmployee(payload, employeeData);
 
-      if (!districtMatches(siteData.district, payload.district)) {
-        throw new AttendanceError("The selected site does not belong to your district. Please choose a different site.");
-      }
+      // Guards are routinely posted across district boundaries (TCS exam
+      // duty is the common case). The geofence, not the home district, is the
+      // location authority; a mismatch is recorded for review instead of
+      // blocking a legitimate punch.
+      const crossDistrictRelief = !districtMatches(
+        siteData.district,
+        payload.district,
+      );
 
       const employeeClientName = normalizeNullableText(
         employeeData.clientName ?? payload.employeeClientName,
@@ -645,6 +649,7 @@ export async function POST(request: NextRequest) {
       if (
         !isTcsSite &&
         activeShiftSource.shiftMode === "fixed" &&
+        activeShiftSource.shiftTemplates.length > 0 &&
         !effectiveShift
       ) {
         throw new AttendanceError(
@@ -749,6 +754,9 @@ export async function POST(request: NextRequest) {
               "Location looks suspicious and requires admin review."
             : null;
       const attendanceReviewWarnings = [
+        crossDistrictRelief
+          ? `Guard district "${payload.district}" differs from site district "${siteData.district ?? ""}"; recorded for review.`
+          : null,
         locationReviewWarning,
         submissionWindow.contextChanged
           ? "Checkout context differed from the original IN session and requires admin review."
@@ -757,6 +765,21 @@ export async function POST(request: NextRequest) {
           ? `Geofence override requested: ${payload.overrideReason}`
           : null,
       ].filter(Boolean) as string[];
+
+      // Consume the identity proof atomically with the attendance write, after
+      // every validation has passed. A rejected or aborted attempt must leave
+      // the proof usable for a legitimate retry.
+      if (proofToConsume) {
+        const consumed = await consumeAttendanceProofInTransaction(
+          transaction,
+          proofToConsume,
+        );
+        if (!consumed) {
+          throw new AttendanceProofError(
+            "This identification has already been used or has expired. Identify the guard again.",
+          );
+        }
+      }
 
       // Auto-close stale open session from a previous date
       if (staleSessionAutoClosed && lastState) {
@@ -862,6 +885,7 @@ export async function POST(request: NextRequest) {
         employeeClientName,
         siteClientName,
         crossClientRelief,
+        crossDistrictRelief,
         sourceCollection: sourceCol,
         shiftCode: selectedShiftCode,
         shiftLabel: selectedShiftLabel,
@@ -1152,7 +1176,12 @@ export async function POST(request: NextRequest) {
     }
 
     await incrementSystemMetric(SYSTEM_METRIC_NAMES.attendanceSubmitFailure);
-    const status = error instanceof AttendanceError ? 400 : 500;
+    const status =
+      error instanceof AttendanceProofError
+        ? 401
+        : error instanceof AttendanceError
+          ? 400
+          : 500;
 
     const { log } = await import("@/lib/server/log");
     log("error", "attendance", "Attendance submit failed", { error: error?.message });
