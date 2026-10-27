@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { mirrorGuardPin } from "@/lib/server/guard-credentials";
 import { db as adminDb } from "@/lib/firebaseAdmin";
 import { normalizeGuardPhone } from "@/lib/guard/identity-utils";
 import { hashPin, validatePinFormat } from "@/lib/guard/pin-utils";
@@ -187,6 +188,9 @@ export async function POST(request: Request) {
       guardFailedAttempts: 0,
       guardLockoutUntil: FieldValue.delete(),
     });
+
+    // Mirror into the server-only credential store (migration phase 1).
+    await mirrorGuardPin(adminDb, employeeDoc.id, pinHash);
 
     await adminDb.collection("guardPinResetEvents").add({
       action: "guard_pin_reset",

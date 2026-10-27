@@ -466,6 +466,27 @@ export default function WorkOrderPage() {
 
         const fetchSites = async () => {
             const mapping: Record<string, string> = {};
+
+            // Client users cannot run a document-id-only Firestore query: the
+            // rules cannot prove the client-scope constraint for `__name__ in`.
+            // Use the server route, which applies the same scope with the Admin
+            // SDK. Staff keep the direct query.
+            if (isClientView) {
+                const response = await authorizedFetch(
+                    `/api/client/sites?ids=${encodeURIComponent(siteIds.join(","))}`,
+                );
+                const body = await response.json().catch(() => ({}));
+                if (response.ok) {
+                    (body.sites ?? []).forEach((site: { id: string; district?: string }) => {
+                        mapping[site.id] = site.district || "";
+                    });
+                } else {
+                    console.error("Error fetching site districts:", body.error || response.status);
+                }
+                setSiteDistricts(mapping);
+                return;
+            }
+
             // Firestore 'in' queries support up to 30 values
             const chunkSize = 30;
             for (let i = 0; i < siteIds.length; i += chunkSize) {
@@ -483,7 +504,7 @@ export default function WorkOrderPage() {
         fetchSites().catch((err) => {
             console.error("Error fetching site districts:", err);
         });
-    }, [workOrdersBySite]);
+    }, [workOrdersBySite, isClientView]);
 
     const selectedDistrictKey = selectedDistrict === 'all' ? 'all' : normalizeSegment(selectedDistrict);
     const selectedExamKey = selectedExamParam === 'all' ? 'all' : normalizeSegment(selectedExamParam);

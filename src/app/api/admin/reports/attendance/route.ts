@@ -7,6 +7,7 @@ import {
   unauthorizedResponse,
 } from "@/lib/server/auth";
 import { matchesClientScope, resolveClientScope } from "@/lib/server/client-access";
+import { escapeCsvValue } from "@/lib/csv";
 
 export const dynamic = "force-dynamic";
 
@@ -16,10 +17,8 @@ function toCsv(rows: Record<string, unknown>[]) {
   }
 
   const headers = Object.keys(rows[0]);
-  const escape = (value: unknown) =>
-    `"${String(value ?? "").replaceAll('"', '""')}"`;
 
-  return [headers.join(","), ...rows.map((row) => headers.map((header) => escape(row[header])).join(","))].join("\n");
+  return [headers.join(","), ...rows.map((row) => headers.map((header) => escapeCsvValue(row[header])).join(","))].join("\n");
 }
 
 function normalizeAttendanceDateParam(value: string | null) {

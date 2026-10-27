@@ -39,6 +39,7 @@ import {
   getClientIp,
 } from "@/lib/server/rate-limit";
 import { verifyAttendanceVerificationToken } from "@/lib/server/attendance-verification-token";
+import { consumeAttendanceProof } from "@/lib/server/attendance-proofs";
 
 export const runtime = "nodejs";
 
@@ -66,15 +67,18 @@ async function tryVerifyAuth(
 }
 
 /**
- * Verify that the authenticated caller owns the employeeDocId they are
- * submitting attendance for. Prevents one guard from submitting for another.
+ * Whether the authenticated caller is the guard the attendance is for.
+ *
+ * Self submissions need no external proof. Everything else is an *assisted*
+ * submission (guard B marking guard A from B's phone) and must present a
+ * single-use identity proof minted for exactly this actor and subject.
  */
-async function verifyCallerOwnership(
+async function callerOwnsEmployee(
   decoded: AppDecodedToken,
   employeeDocId: string,
-): Promise<void> {
+): Promise<boolean> {
   if (decoded.employeeDocId && decoded.employeeDocId === employeeDocId) {
-    return;
+    return true;
   }
 
   const { db: adminDb } = await import("@/lib/firebaseAdmin");
@@ -88,13 +92,7 @@ async function verifyCallerOwnership(
   }
 
   const employeeData = employeeSnap.data() as Record<string, any>;
-  if (employeeData.guardAuthUid === decoded.uid) {
-    return;
-  }
-
-  throw new AttendanceError(
-    "You can only submit attendance for your own account.",
-  );
+  return employeeData.guardAuthUid === decoded.uid;
 }
 
 /** Business-logic errors that should return HTTP 400 (not 500). */
@@ -151,7 +149,9 @@ function parseSiteCoordinates(siteData: Record<string, any>) {
         ? geolocation.lat
         : typeof siteData.lat === "number"
           ? siteData.lat
-          : Number(siteData.latString);
+          : typeof siteData.latitude === "number"
+            ? siteData.latitude
+            : Number(siteData.latitude) || Number(siteData.latString);
   const lng =
     typeof geolocation?.longitude === "number"
       ? geolocation.longitude
@@ -159,7 +159,9 @@ function parseSiteCoordinates(siteData: Record<string, any>) {
         ? geolocation.lng
         : typeof siteData.lng === "number"
           ? siteData.lng
-          : Number(siteData.lngString);
+          : typeof siteData.longitude === "number"
+            ? siteData.longitude
+            : Number(siteData.longitude) || Number(siteData.lngString);
 
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     return null;
@@ -316,28 +318,85 @@ export async function POST(request: NextRequest) {
     const payload = attendanceSubmissionSchema.parse(await request.json());
 
     // ── 2. Guard identity ─────────────────────────────────────────────────────
-    // Logged-in guards are bound to their own employee record. Public callers
-    // must present the short-lived identity proof issued after QR/phone/ID lookup.
+    // Three supported shapes:
+    //   self      — the signed-in guard submits their own attendance.
+    //   assisted  — a signed-in guard submits for a colleague who does not have
+    //               their phone, using the colleague's QR badge, employee ID,
+    //               phone, or (TCS only) resource ID.
+    //   kiosk     — no session; only a signed QR badge is accepted.
+    // Assisted and kiosk submissions require a single-use proof minted for this
+    // exact subject (and actor, when signed in).
+    const verification = payload.attendanceVerificationToken
+      ? verifyAttendanceVerificationToken(payload.attendanceVerificationToken)
+      : null;
+    let assistedSubmission = false;
+    // Consumed only after the idempotency lookup: a retry of a request that
+    // already committed must get its duplicate result, not a "proof used" 401.
+    let proofToConsume: {
+      nonce: string;
+      employeeDocId: string;
+      actorUid: string | null;
+    } | null = null;
+
     if (isAuthenticated) {
-      await verifyCallerOwnership(decoded, payload.employeeDocId);
+      const ownsEmployee = await callerOwnsEmployee(decoded, payload.employeeDocId);
+
+      if (!ownsEmployee) {
+        if (decoded.role !== "guard") {
+          return NextResponse.json(
+            { error: "You can only submit attendance for your own account." },
+            { status: 403 },
+          );
+        }
+        if (
+          !verification ||
+          verification.employeeDocId !== payload.employeeDocId ||
+          verification.actorUid !== decoded.uid
+        ) {
+          return NextResponse.json(
+            {
+              error:
+                "Identify the guard again from this phone, then submit. The identification has expired or belongs to another account.",
+            },
+            { status: 401 },
+          );
+        }
+        proofToConsume = {
+          nonce: verification.nonce,
+          employeeDocId: payload.employeeDocId,
+          actorUid: decoded.uid,
+        };
+        assistedSubmission = true;
+      } else if (verification && verification.employeeDocId === payload.employeeDocId) {
+        // A self-submitting guard may still hold a proof from the identify step
+        // (e.g. they looked themselves up first). Burn it so it cannot be reused.
+        proofToConsume = {
+          nonce: verification.nonce,
+          employeeDocId: payload.employeeDocId,
+          actorUid: verification.actorUid,
+        };
+      }
     } else {
-      const verification = payload.attendanceVerificationToken
-        ? verifyAttendanceVerificationToken(
-            payload.attendanceVerificationToken,
-          )
-        : null;
       if (
         !verification ||
-        verification.employeeDocId !== payload.employeeDocId
+        verification.employeeDocId !== payload.employeeDocId ||
+        verification.actorUid !== null ||
+        verification.method !== "qr"
       ) {
         return NextResponse.json(
           {
             error:
-              "Guard identification has expired or is invalid. Identify the guard again.",
+              "A shared device can only mark attendance from a signed QR badge. Sign in to use an employee ID, phone number, or resource ID.",
           },
           { status: 401 },
         );
       }
+      proofToConsume = {
+        nonce: verification.nonce,
+        employeeDocId: payload.employeeDocId,
+        actorUid: null,
+      };
+      assistedSubmission = true;
     }
 
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
@@ -359,6 +418,22 @@ export async function POST(request: NextRequest) {
           duplicate: true,
           message: "Attendance already recorded for this request.",
         });
+      }
+    }
+
+    // Burn the single-use proof only once the request is known not to be a
+    // retry; otherwise a lost response would turn a successful submission into
+    // a 401 on retry.
+    if (proofToConsume) {
+      const consumed = await consumeAttendanceProof(proofToConsume);
+      if (!consumed) {
+        return NextResponse.json(
+          {
+            error:
+              "This identification has already been used or has expired. Identify the guard again.",
+          },
+          { status: 401 },
+        );
       }
     }
 
@@ -424,6 +499,7 @@ export async function POST(request: NextRequest) {
       ? attendanceLogsCollection.doc(payload.clientRequestId)
       : attendanceLogsCollection.doc();
     let transactionDuplicateId: string | null = null;
+    let transactionConflict = false;
 
     await adminDb.runTransaction(async (transaction) => {
       const [employeeSnap, siteSnap, stateSnap, existingLogSnap] =
@@ -435,6 +511,16 @@ export async function POST(request: NextRequest) {
       ]);
 
       if (existingLogSnap.exists) {
+        const existing = existingLogSnap.data() as Record<string, unknown> | undefined;
+        const existingSubject =
+          typeof existing?.employeeDocId === "string" ? existing.employeeDocId : null;
+        // The log document id is the client request id. If another guard already
+        // used that id, reporting duplicate success would silently drop this
+        // submission, so surface an explicit conflict instead.
+        if (existingSubject && existingSubject !== payload.employeeDocId) {
+          transactionConflict = true;
+          return;
+        }
         transactionDuplicateId = attendanceLogRef.id;
         return;
       }
@@ -834,6 +920,15 @@ export async function POST(request: NextRequest) {
         createdAt: now,
         submittedByUid: decoded?.uid ?? null,
         submittedByRole: decoded?.role ?? null,
+        // Assisted attendance: a colleague (or a shared kiosk) marked this
+        // guard present. Kept for audit and review reporting.
+        assistedSubmission,
+        attendanceMethod:
+          verification?.method ?? (isAuthenticated ? "authenticated" : null),
+        markedByUid: assistedSubmission ? decoded?.uid ?? null : null,
+        markedByEmployeeDocId: assistedSubmission
+          ? decoded?.employeeDocId ?? null
+          : null,
         // Robustness fields
         processedClientRequestId: payload.clientRequestId ?? null,
         attendanceAttemptId: payload.attendanceAttemptId,
@@ -848,6 +943,9 @@ export async function POST(request: NextRequest) {
               siteId: payload.siteId,
               status: payload.status,
               clientRequestId: payload.clientRequestId,
+              assistedSubmission,
+              attendanceMethod:
+                verification?.method ?? (isAuthenticated ? "authenticated" : null),
             },
           ),
         ],
@@ -1015,6 +1113,16 @@ export async function POST(request: NextRequest) {
         { merge: true },
       );
     });
+
+    if (transactionConflict) {
+      return NextResponse.json(
+        {
+          error:
+            "This request id was already used for another guard. Retry with a new request id.",
+        },
+        { status: 409 },
+      );
+    }
 
     if (transactionDuplicateId) {
       return NextResponse.json({

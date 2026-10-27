@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import fs from "fs/promises";
 import path from "path";
 
@@ -11,19 +12,79 @@ const IDENTITY_PLATFORM_BASE = "https://identityplatform.googleapis.com/v1";
 
 type GoogleApiOptions = RequestInit & {
   acceptStatuses?: number[];
+  /** Region service account JSON. When present it replaces HQ ADC for this call. */
+  serviceAccountJson?: string;
 };
 
 type FirebaseAppConfig = Record<string, string | undefined>;
 
-async function getAccessToken(): Promise<string> {
-  const { GoogleAuth } = await import("google-auth-library");
-  const auth = new GoogleAuth({
-    scopes: [
-      "https://www.googleapis.com/auth/cloud-platform",
-      "https://www.googleapis.com/auth/firebase",
-    ],
+type CallerAuth = { serviceAccountJson?: string };
+
+const GOOGLE_API_SCOPES = [
+  "https://www.googleapis.com/auth/cloud-platform",
+  "https://www.googleapis.com/auth/firebase",
+];
+
+/**
+ * JWT clients are cached by a hash of the key material so a multi-index deploy
+ * mints one token instead of one per API call. The cache holds the parsed
+ * credential in memory only; nothing is ever logged or returned.
+ */
+const serviceAccountClients = new Map<string, any>();
+
+function serviceAccountCacheKey(serviceAccountJson: string) {
+  return createHash("sha256").update(serviceAccountJson).digest("hex");
+}
+
+async function serviceAccountJwt(serviceAccountJson: string) {
+  const cacheKey = serviceAccountCacheKey(serviceAccountJson);
+  const cached = serviceAccountClients.get(cacheKey);
+  if (cached) return cached;
+
+  const { JWT } = await import("google-auth-library");
+  let parsed: { client_email?: string; private_key?: string };
+  try {
+    parsed = JSON.parse(serviceAccountJson);
+  } catch {
+    throw new Error("Region service account JSON is not valid JSON.");
+  }
+  if (!parsed?.client_email || !parsed?.private_key) {
+    throw new Error(
+      "Region service account JSON is missing client_email or private_key.",
+    );
+  }
+
+  const jwt = new JWT({
+    email: parsed.client_email,
+    key: parsed.private_key.replace(/\\n/g, "\n"),
+    scopes: GOOGLE_API_SCOPES,
   });
-  const client = await auth.getClient();
+  serviceAccountClients.set(cacheKey, jwt);
+  return jwt;
+}
+
+/**
+ * OAuth2 access token for the Google APIs used here.
+ *
+ * Without `serviceAccountJson` this is the HQ/ADC identity the existing
+ * automation uses. With it, the region's own service account signs the JWT, so
+ * index deployment no longer depends on HQ having access to a state's project.
+ */
+async function getAccessToken(auth: CallerAuth = {}): Promise<string> {
+  if (auth.serviceAccountJson) {
+    const client = await serviceAccountJwt(auth.serviceAccountJson);
+    const token = await client.getAccessToken();
+    if (!token?.token) {
+      throw new Error(
+        "Failed to get an OAuth2 access token for the region service account. Verify the key is active and the account still exists.",
+      );
+    }
+    return token.token;
+  }
+
+  const { GoogleAuth } = await import("google-auth-library");
+  const auth0 = new GoogleAuth({ scopes: GOOGLE_API_SCOPES });
+  const client = await auth0.getClient();
   const token = await client.getAccessToken();
   if (!token?.token) {
     throw new Error(
@@ -44,9 +105,10 @@ async function parseResponse(res: Response): Promise<any> {
 }
 
 async function googleApiRequest(url: string, options: GoogleApiOptions = {}): Promise<any> {
-  const token = await getAccessToken();
+  const { acceptStatuses, serviceAccountJson, ...init } = options;
+  const token = await getAccessToken({ serviceAccountJson });
   const res = await fetch(url, {
-    ...options,
+    ...init,
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
@@ -54,24 +116,36 @@ async function googleApiRequest(url: string, options: GoogleApiOptions = {}): Pr
     },
   });
   const data = await parseResponse(res);
-  if (!res.ok && !options.acceptStatuses?.includes(res.status)) {
+  if (!res.ok && !acceptStatuses?.includes(res.status)) {
     const message = data?.error?.message || data?.message || `HTTP ${res.status}`;
     throw new Error(`Google API error (${res.status}): ${message}`);
   }
   return data;
 }
 
+type PollOptions = { maxRetries?: number; serviceAccountJson?: string };
+
 async function pollOperation(
   operationName: string,
   fallbackBaseUrl: string,
-  maxRetries = 60,
+  retriesOrDefault: number | PollOptions = 60,
 ): Promise<any> {
+  const options: { maxRetries: number; serviceAccountJson?: string } =
+    typeof retriesOrDefault === "number"
+      ? { maxRetries: retriesOrDefault }
+      : {
+          maxRetries: retriesOrDefault.maxRetries ?? 60,
+          serviceAccountJson: retriesOrDefault.serviceAccountJson,
+        };
+  const maxRetries = options.maxRetries;
   const operationUrl = operationName.startsWith("http")
     ? operationName
     : `${fallbackBaseUrl}/${operationName.replace(/^\//, "")}`;
 
   for (let i = 0; i < maxRetries; i++) {
-    const result = await googleApiRequest(operationUrl);
+    const result = await googleApiRequest(operationUrl, {
+      serviceAccountJson: options.serviceAccountJson,
+    });
     if (result?.done) {
       if (result.error) throw new Error(`Operation failed: ${result.error.message}`);
       return result.response || result;
@@ -346,8 +420,14 @@ export async function createServiceAccountKey(projectId: string): Promise<{ priv
   return { privateKeyData, serviceAccountEmail, serviceAccountJson };
 }
 
-export async function listFirestoreIndexes(projectId: string): Promise<{ name: string; state: string; collectionGroup?: string; fields?: any[] }[]> {
-  const result = await googleApiRequest(`${FIRESTORE_ADMIN_BASE}/projects/${projectId}/databases/(default)/collectionGroups/-/indexes`);
+export async function listFirestoreIndexes(
+  projectId: string,
+  serviceAccountJson?: string,
+): Promise<{ name: string; state: string; collectionGroup?: string; fields?: any[] }[]> {
+  const result = await googleApiRequest(
+    `${FIRESTORE_ADMIN_BASE}/projects/${projectId}/databases/(default)/collectionGroups/-/indexes`,
+    { serviceAccountJson },
+  );
   return (result?.indexes || []).map((idx: any) => ({
     name: idx.name,
     state: idx.state,
@@ -398,25 +478,77 @@ function indexSignature(index: { collectionGroup: string; queryScope?: string; f
   });
 }
 
-export async function deployFirestoreIndexes(projectId: string, indexesFile = path.join(process.cwd(), "firestore.indexes.json")): Promise<{ created: number; existing: number }> {
-  const raw = await fs.readFile(indexesFile, "utf8");
-  const definition = JSON.parse(raw) as { indexes?: Array<{ collectionGroup: string; queryScope?: string; fields: any[] }> };
-  const desired = definition.indexes || [];
-  const existing = await listFirestoreIndexes(projectId);
-  const existingSignatures = new Set(
-    existing
-      .filter((idx) => idx.collectionGroup && idx.fields)
-      .map((idx) => indexSignature({
-        collectionGroup: idx.collectionGroup || "",
-        queryScope: "COLLECTION",
-        fields: idx.fields || [],
-      })),
-  );
+export type DeployFirestoreIndexesOptions = {
+  indexesFile?: string;
+  /** Region service account JSON; omit to keep the HQ/ADC identity. */
+  serviceAccountJson?: string;
+  /**
+   * Total time allowed for newly created indexes to reach READY. Index builds
+   * routinely take minutes, so anything unfinished after this budget is
+   * reported as `pending` instead of holding the request open.
+   */
+  maxWaitMs?: number;
+};
 
+type IndexDefinition = {
+  collectionGroup: string;
+  queryScope?: string;
+  fields: any[];
+};
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Create the composite indexes the region deployment needs, idempotently.
+ *
+ * Existing indexes are matched by their signature, concurrent deploys surface as
+ * 409 ALREADY_EXISTS (counted as existing), and the readiness wait is bounded by
+ * `maxWaitMs` so a slow index build reports as `pending` rather than timing out
+ * the request.
+ */
+export async function deployFirestoreIndexes(
+  projectId: string,
+  indexesFileOrDefault: string | DeployFirestoreIndexesOptions = path.join(process.cwd(), "firestore.indexes.json"),
+  serviceAccountJson?: string,
+): Promise<{ created: number; existing: number; pending: number }> {
+  const options: DeployFirestoreIndexesOptions =
+    typeof indexesFileOrDefault === "string"
+      ? { indexesFile: indexesFileOrDefault, serviceAccountJson }
+      : indexesFileOrDefault;
+  const indexesFile = options.indexesFile ?? path.join(process.cwd(), "firestore.indexes.json");
+  const callerJson = options.serviceAccountJson;
+  const maxWaitMs = options.maxWaitMs ?? 45_000;
+
+  const raw = await fs.readFile(indexesFile, "utf8");
+  const definition = JSON.parse(raw) as { indexes?: IndexDefinition[] };
+  const desired = definition.indexes || [];
+
+  const signaturesWithState = async () => {
+    const listed = await listFirestoreIndexes(projectId, callerJson);
+    const states = new Map<string, string>();
+    for (const index of listed) {
+      if (!index.collectionGroup || !index.fields) continue;
+      states.set(
+        indexSignature({
+          collectionGroup: index.collectionGroup,
+          queryScope: "COLLECTION",
+          fields: index.fields || [],
+        }),
+        String(index.state || ""),
+      );
+    }
+    return states;
+  };
+
+  const before = await signaturesWithState();
   let created = 0;
   let alreadyPresent = 0;
+
   for (const index of desired) {
-    if (existingSignatures.has(indexSignature(index))) {
+    const signature = indexSignature(index);
+    if (before.has(signature)) {
       alreadyPresent += 1;
       continue;
     }
@@ -429,19 +561,166 @@ export async function deployFirestoreIndexes(projectId: string, indexesFile = pa
       `${FIRESTORE_ADMIN_BASE}/projects/${projectId}/databases/(default)/collectionGroups/${encodeURIComponent(index.collectionGroup)}/indexes`,
       {
         method: "POST",
+        serviceAccountJson: callerJson,
+        acceptStatuses: [409],
         body: JSON.stringify({
           queryScope: index.queryScope || "COLLECTION",
           fields,
         }),
       },
     );
-    if (result?.name) await pollOperation(result.name, FIRESTORE_ADMIN_BASE, 5).catch(() => {});
+
+    if (result?.error?.code === 409 || result?.error?.status === "ALREADY_EXISTS") {
+      alreadyPresent += 1;
+      continue;
+    }
     created += 1;
   }
 
-  return { created, existing: alreadyPresent };
+  if (created === 0) {
+    // Nothing new: still report indexes that exist but have not finished building.
+    const states = await signaturesWithState();
+    const pending = desired.filter((index) => {
+      const state = states.get(indexSignature(index));
+      return state !== undefined && state !== "READY";
+    }).length;
+    return { created, existing: alreadyPresent, pending };
+  }
+
+  const deadline = Date.now() + maxWaitMs;
+  let states = await signaturesWithState();
+  const unfinished = () =>
+    desired.filter((index) => {
+      const state = states.get(indexSignature(index));
+      return state === undefined || state !== "READY";
+    }).length;
+
+  let remaining = unfinished();
+  let delay = 2_000;
+  while (remaining > 0 && Date.now() < deadline) {
+    await sleep(Math.min(delay, Math.max(0, deadline - Date.now())));
+    states = await signaturesWithState();
+    remaining = unfinished();
+    delay = Math.min(delay * 2, 10_000);
+  }
+
+  return { created, existing: alreadyPresent, pending: remaining };
 }
 
 export function buildDefaultStorageBucket(projectId: string) {
   return normalizeStorageBucket(projectId);
+}
+
+/**
+ * Accept only a bare GCS bucket name. Operators paste `gs://bucket` or a
+ * console URL often enough that silently storing one breaks Storage on the
+ * region deployment, so `gs://` is stripped and anything else is rejected.
+ *
+ * @returns the bucket name, or `null` when the value cannot be a bucket name.
+ */
+export function normalizeStorageBucketName(value?: string | null): string | null {
+  if (typeof value !== "string") return null;
+  let bucket = value.trim();
+  if (!bucket) return null;
+  bucket = bucket.replace(/^gs:\/\//i, "").replace(/\/+$/, "").trim();
+  if (!bucket || bucket.includes("/") || /\s/.test(bucket)) return null;
+  if (!/^[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]$/.test(bucket)) return null;
+  return bucket;
+}
+
+export type RegionDatabaseConfigFiles = {
+  firestoreRules: string;
+  storageRules: string;
+  indexesFile: string;
+};
+
+/**
+ * Read the rule sources and index definition the region deployment must apply.
+ * They ship with the app, so a read failure is a deployment error worth naming.
+ */
+export async function readDatabaseConfigFiles(
+  rootDir = process.cwd(),
+): Promise<RegionDatabaseConfigFiles> {
+  const firestoreRulesPath = path.join(rootDir, "firestore.rules");
+  const storageRulesPath = path.join(rootDir, "storage.rules");
+  const indexesFile = path.join(rootDir, "firestore.indexes.json");
+
+  const readOrExplain = async (filePath: string, label: string) => {
+    try {
+      return await fs.readFile(filePath, "utf8");
+    } catch {
+      throw new Error(
+        `${label} could not be read at ${filePath}. The deployment build must include ${path.basename(filePath)}.`,
+      );
+    }
+  };
+
+  const [firestoreRules, storageRules] = await Promise.all([
+    readOrExplain(firestoreRulesPath, "firestore.rules"),
+    readOrExplain(storageRulesPath, "storage.rules"),
+  ]);
+  await readOrExplain(indexesFile, "firestore.indexes.json");
+
+  return { firestoreRules, storageRules, indexesFile };
+}
+
+/**
+ * Verify the region's Storage bucket with a metadata call made as the region
+ * service account (never HQ ADC). `validateRegionFirebaseConnection` performs
+ * the same check, but this is the isolated probe the database-setup route needs
+ * to report the bucket step on its own.
+ */
+export async function verifyStorageBucketWithRegionCredentials(input: {
+  projectId: string;
+  storageBucket: string;
+  serviceAccountJson: string;
+}): Promise<{ bucket: string; location?: string; storageClass?: string }> {
+  const adminModule = await import("firebase-admin");
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(input.serviceAccountJson);
+  } catch {
+    throw new Error("Region service account JSON is not valid JSON.");
+  }
+  if (parsed.project_id && String(parsed.project_id) !== input.projectId) {
+    throw new Error(
+      `Region service account project (${String(parsed.project_id)}) does not match the region project (${input.projectId}).`,
+    );
+  }
+
+  const clientEmail =
+    typeof parsed.client_email === "string" ? parsed.client_email : undefined;
+  const privateKey =
+    typeof parsed.private_key === "string"
+      ? parsed.private_key.replace(/\\n/g, "\n")
+      : undefined;
+  if (!clientEmail || !privateKey) {
+    throw new Error(
+      "Region service account JSON is missing client_email or private_key.",
+    );
+  }
+
+  const app = adminModule.initializeApp(
+    {
+      projectId: input.projectId,
+      credential: adminModule.credential.cert({
+        projectId: input.projectId,
+        clientEmail,
+        privateKey,
+      }),
+      storageBucket: input.storageBucket,
+    },
+    `bucket-verify-${input.projectId}-${Date.now()}`,
+  );
+
+  try {
+    const [metadata] = await app.storage().bucket(input.storageBucket).getMetadata();
+    return {
+      bucket: String(metadata?.name || input.storageBucket),
+      location: metadata?.location ? String(metadata.location) : undefined,
+      storageClass: metadata?.storageClass ? String(metadata.storageClass) : undefined,
+    };
+  } finally {
+    await app.delete().catch(() => {});
+  }
 }

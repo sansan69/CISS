@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
+// Public identity card for a guard. Deliberately never returns `qrCodeUrl`:
+// that value is a PNG of the *signed* attendance badge, so publishing it for an
+// unauthenticated caller hands out a working attendance credential for any
+// employee document id (2026-10-06 assessment H-10 / new finding N-1).
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -34,7 +38,6 @@ export async function GET(
         profilePictureUrl: "",
         joiningDate: "2026-01-12T00:00:00.000Z",
         status: "Active",
-        qrCodeUrl: "",
         createdAt: "2026-01-12T00:00:00.000Z",
         updatedAt: "2026-04-27T00:00:00.000Z",
         publicProfile: {
@@ -67,7 +70,6 @@ export async function GET(
         clientName: publicProfile.clientName ?? data.clientName ?? "",
         profilePictureUrl: publicProfile.profilePictureUrl ?? data.profilePictureUrl ?? "",
         status: publicProfile.status ?? data.status ?? "",
-        qrCodeUrl: data.qrCodeUrl ?? "",
         joiningDate: data.joiningDate ?? null,
       });
     }
@@ -79,7 +81,6 @@ export async function GET(
       clientName: data.clientName ?? "",
       profilePictureUrl: data.profilePictureUrl ?? "",
       status: data.status ?? "",
-      qrCodeUrl: data.qrCodeUrl ?? "",
       joiningDate: data.joiningDate ?? null,
     });
   } catch (error) {

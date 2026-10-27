@@ -1,13 +1,12 @@
 // A robust, production-ready service worker.
 // See: https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API
 
-const CACHE_NAME = 'ciss-workforce-cache-v6'; // Enrollment profile/config cache refresh
+const CACHE_NAME = 'ciss-workforce-cache-v7'; // Retirement: payslips route removed from the shell
 const APP_SHELL_URLS = [
   '/',
   '/guard/dashboard',
   '/guard/attendance',
   '/guard/training',
-  '/guard/payslips',
   '/guard/profile',
   '/admin-login',
   '/guard-login',

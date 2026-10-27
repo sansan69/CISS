@@ -8,15 +8,64 @@ export type RegionStatus =
   | "suspended"
   | "error";
 
+/**
+ * How a region's Firebase backend was obtained.
+ *
+ * - `byo_firebase`: the state owns its own Firebase project (created and owned by
+ *   its Google account) and hands us the web config, an optional Android
+ *   google-services.json, a service-account key, and the domains that may serve
+ *   its app. We never create a GCP project in this mode.
+ * - `automated`: provisioned by the Super Admin automation (GCP project created
+ *   and apps generated on our behalf).
+ */
+export type RegionOnboardingMode = "byo_firebase" | "automated";
+
 export interface RegionOnboardingChecklist {
   metadataSaved: boolean;
   firebaseValidated: boolean;
   defaultsSeeded: boolean;
   regionAdminCreated: boolean;
   vercelConfigured: boolean;
+  /** Firestore + Storage security rules released against the region project. */
+  rulesDeployed?: boolean;
+  /** Composite Firestore indexes created (idempotent) against the region project. */
+  indexesDeployed?: boolean;
+  /** The region's Storage bucket answered a metadata call with the region service account. */
+  storageBucketVerified?: boolean;
   lastValidatedAt?: unknown;
   lastSeededAt?: unknown;
   lastAdminCreatedAt?: unknown;
+}
+
+/** Outcome of the last `POST /regions/[id]/database-setup` run. */
+export interface RegionDatabaseSetup {
+  rulesDeployedAt?: unknown;
+  storageRulesDeployedAt?: unknown;
+  bucketVerifiedAt?: unknown;
+  indexes?: {
+    created: number;
+    existing: number;
+    /** Indexes whose creation was accepted but not yet READY within the wait cap. */
+    pending: number;
+    deployedAt?: unknown;
+  };
+  lastAttemptAt?: unknown;
+  lastError?: string | null;
+}
+
+export type RegionDatabaseSetupStepId =
+  | "bucket"
+  | "firestoreRules"
+  | "storageRules"
+  | "indexes";
+
+export interface RegionDatabaseSetupStep {
+  step: RegionDatabaseSetupStepId;
+  status: "deployed" | "verified" | "skipped" | "failed";
+  message?: string;
+  created?: number;
+  existing?: number;
+  pending?: number;
 }
 
 export interface RegionValidationChecks {
@@ -160,6 +209,13 @@ export interface RegionRecord {
   lastVercelProvisionedAt?: unknown;
   androidApiKey?: string | null;
   androidAppId?: string | null;
+  /** Android application id (package name) registered in the state's Firebase project. */
+  androidPackageName?: string | null;
+  /** Hostnames allowed to serve this region's app. Empty/absent means "not locked". */
+  allowedDomains?: string[];
+  onboardingMode?: RegionOnboardingMode;
+  /** Outcome of the last database-setup run (rules, indexes, bucket). */
+  databaseSetup?: RegionDatabaseSetup | null;
   webApiKey?: string | null;
   webAppId?: string | null;
   isCurrentRegion?: boolean;
@@ -221,4 +277,34 @@ export interface RegionWebConfigInput {
   authDomain?: string | null;
   messagingSenderId?: string | null;
   measurementId?: string | null;
+  // BYO-Firebase inputs: the Android client and the host lock are optional.
+  androidAppId?: string | null;
+  androidApiKey?: string | null;
+  androidPackageName?: string | null;
+  /** Array or a newline/comma separated string; normalised before it is stored. */
+  allowedDomains?: string[] | string | null;
+  onboardingMode?: RegionOnboardingMode;
+}
+
+/** Android client config extracted from a state's `google-services.json`. */
+export interface AndroidGoogleServicesConfig {
+  projectId: string;
+  appId: string;
+  apiKey: string;
+  packageName: string;
+}
+
+/**
+ * Body of `POST /api/super-admin/regions` for BYO-Firebase state enrollment.
+ *
+ * The service account is transport-only: it is validated, encrypted with
+ * `saveRegionConnection`, and never written to the region document or returned.
+ */
+export interface RegionOnboardingInput extends RegionWebConfigInput {
+  regionCode: string;
+  regionName: string;
+  regionAdminEmail?: string | null;
+  serviceAccountJson?: string | null;
+  serviceAccountBase64?: string | null;
+  googleServicesJson?: string | null;
 }

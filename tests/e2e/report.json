@@ -1,0 +1,776 @@
+{
+  "started": "2026-10-27T06:33:36.610Z",
+  "finished": "2026-10-27T06:34:16.878Z",
+  "project": "demo-ciss-e2e",
+  "region": "TN",
+  "results": [
+    {
+      "flow": "infra",
+      "check": "Firebase emulator suite started",
+      "status": "PASS",
+      "evidence": "auth:9099 firestore:8080 storage:9199"
+    },
+    {
+      "flow": "infra",
+      "check": "firestore.rules are loaded and enforced",
+      "status": "PASS",
+      "evidence": "anonymous read denied — repository rules active"
+    },
+    {
+      "flow": "infra",
+      "check": "Next.js server started against the emulators",
+      "status": "PASS",
+      "evidence": "http://127.0.0.1:3100 (pid 78028)"
+    },
+    {
+      "flow": "infra",
+      "check": "super admin session minted against the auth emulator",
+      "status": "PASS",
+      "evidence": "e2e-super-c904ab@example.test"
+    },
+    {
+      "flow": "F1 Region onboarding (BYO Firebase)",
+      "check": "POST /regions creates a BYO-Firebase region",
+      "status": "PASS",
+      "evidence": "HTTP 201"
+    },
+    {
+      "flow": "F1 Region onboarding (BYO Firebase)",
+      "check": "region marked validated + persistent connection saved",
+      "status": "PASS",
+      "evidence": "status=validated persistentConnectionReady=true"
+    },
+    {
+      "flow": "F1 Region onboarding (BYO Firebase)",
+      "check": "onboardingMode = byo_firebase",
+      "status": "PASS",
+      "evidence": "byo_firebase"
+    },
+    {
+      "flow": "F1 Region onboarding (BYO Firebase)",
+      "check": "allowed domains normalised",
+      "status": "PASS",
+      "evidence": "[\"ciss-tn.example\",\"*.ciss-tn.example\"]"
+    },
+    {
+      "flow": "F1 Region onboarding (BYO Firebase)",
+      "check": "android package persisted from google-services.json",
+      "status": "PASS",
+      "evidence": "in.ciss.workforce.tn"
+    },
+    {
+      "flow": "F1 Region onboarding (BYO Firebase)",
+      "check": "POST response contains no service-account material",
+      "status": "PASS",
+      "evidence": "clean"
+    },
+    {
+      "flow": "F1 Region onboarding (BYO Firebase)",
+      "check": "duplicate region rejected",
+      "status": "PASS",
+      "evidence": "HTTP 409"
+    },
+    {
+      "flow": "F1 Region onboarding (BYO Firebase)",
+      "check": "service account from another project rejected",
+      "status": "PASS",
+      "evidence": "HTTP 400"
+    },
+    {
+      "flow": "F1 Region onboarding (BYO Firebase)",
+      "check": "POST /[id]/validate re-validates against Firestore+Auth",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F1 Region onboarding (BYO Firebase)",
+      "check": "validation checks firestore+auth reachable",
+      "status": "PASS",
+      "evidence": "{\"projectIdMatches\":true,\"firestoreReachable\":true,\"authReachable\":true,\"storageReachable\":true}"
+    },
+    {
+      "flow": "F1 Region onboarding (BYO Firebase)",
+      "check": "POST /[id]/seed writes the default documents",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F1 Region onboarding (BYO Firebase)",
+      "check": "seed reports 3 default documents",
+      "status": "PASS",
+      "evidence": "systemConfig/runtime,enrollmentFormConfig/global,regionSetupProgress/default"
+    },
+    {
+      "flow": "F1 Region onboarding (BYO Firebase)",
+      "check": "seeded doc exists: systemConfig/runtime",
+      "status": "PASS",
+      "evidence": "found"
+    },
+    {
+      "flow": "F1 Region onboarding (BYO Firebase)",
+      "check": "seeded doc exists: enrollmentFormConfig/global",
+      "status": "PASS",
+      "evidence": "found"
+    },
+    {
+      "flow": "F1 Region onboarding (BYO Firebase)",
+      "check": "seeded doc exists: regionSetupProgress/default",
+      "status": "PASS",
+      "evidence": "found"
+    },
+    {
+      "flow": "F1 Region onboarding (BYO Firebase)",
+      "check": "POST /[id]/create-admin creates the region admin",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F1 Region onboarding (BYO Firebase)",
+      "check": "region admin carries role=admin + stateCode",
+      "status": "PASS",
+      "evidence": "{\"role\":\"admin\",\"admin\":true,\"stateCode\":\"TN\"}"
+    },
+    {
+      "flow": "F1 Region onboarding (BYO Firebase)",
+      "check": "GET deployment-config",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F1 Region onboarding (BYO Firebase)",
+      "check": "deploymentConfig REGION_CODE",
+      "status": "PASS",
+      "evidence": "TN"
+    },
+    {
+      "flow": "F1 Region onboarding (BYO Firebase)",
+      "check": "current region's deploymentConfig is served from its own env",
+      "status": "PASS",
+      "evidence": "synthetic branch"
+    },
+    {
+      "flow": "F1 Region onboarding (BYO Firebase)",
+      "check": "POST /regions (second region, stored-document path)",
+      "status": "PASS",
+      "evidence": "HTTP 201"
+    },
+    {
+      "flow": "F1 Region onboarding (BYO Firebase)",
+      "check": "deploymentConfig android app/package for a stored region",
+      "status": "PASS",
+      "evidence": "appId=1:100000000001:android:0000000000000000000002 package=in.ciss.workforce.ka"
+    },
+    {
+      "flow": "F1 Region onboarding (BYO Firebase)",
+      "check": "deploymentConfig allowed domains for a stored region",
+      "status": "PASS",
+      "evidence": "ciss-ka.example"
+    },
+    {
+      "flow": "F1 Region onboarding (BYO Firebase)",
+      "check": "deploymentConfig onboarding mode for a stored region",
+      "status": "PASS",
+      "evidence": "byo_firebase"
+    },
+    {
+      "flow": "F1 Region onboarding (BYO Firebase)",
+      "check": "deployment-config contains no service account",
+      "status": "PASS",
+      "evidence": "clean"
+    },
+    {
+      "flow": "infra",
+      "check": "region admin can sign in with the created credentials",
+      "status": "PASS",
+      "evidence": "tn-admin-c904ab@example.test"
+    },
+    {
+      "flow": "F2 Guard enrollment + guard auth",
+      "check": "Public enrollment API (POST /api/employees/enroll)",
+      "status": "BLOCKED",
+      "evidence": "HTTP 400 — {\"error\":\"Profile picture must be uploaded through the enrollment form.\"} — the real submission is gated on Storage-uploaded document references (draft-scoped) and, at the write, on Cloud KMS Aadhaar encryption; the emulator provides neither, so this leg is recorded as blocked rather than passed"
+    },
+    {
+      "flow": "F2 Guard enrollment + guard auth",
+      "check": "guard employee fixture created (enrollment API bypassed: KMS)",
+      "status": "PASS",
+      "evidence": "employees/3TLwysZuUm0Y2NVfsCWN"
+    },
+    {
+      "flow": "F2 Guard enrollment + guard auth",
+      "check": "Guard sets a PIN (POST /api/guard/auth/setup-pin)",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F2 Guard enrollment + guard auth",
+      "check": "employee doc linked to a guard auth uid",
+      "status": "PASS",
+      "evidence": "NAlkHJXKl5uSDDZKT7jXJyiauPyL"
+    },
+    {
+      "flow": "F2 Guard enrollment + guard auth",
+      "check": "Guard login endpoint (POST /api/guard/auth/login)",
+      "status": "BLOCKED",
+      "evidence": "HTTP 500 — {\"error\":\"Could not complete sign-in.\"} (localhost Host → identitytoolkit probe → NEXT_PUBLIC_APP_URL fallback; cannot complete locally)"
+    },
+    {
+      "flow": "F2 Guard enrollment + guard auth",
+      "check": "guard ID token via the same custom-token exchange (fixture path)",
+      "status": "PASS",
+      "evidence": "admin.createCustomToken → auth emulator"
+    },
+    {
+      "flow": "F2 Guard enrollment + guard auth",
+      "check": "Guard reads own profile (GET /api/guard/profile)",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F2 Guard enrollment + guard auth",
+      "check": "Admin token is rejected by a guard-only route",
+      "status": "PASS",
+      "evidence": "HTTP 401"
+    },
+    {
+      "flow": "F3 Field officer creation + district scoping",
+      "check": "Admin creates a field officer (POST /api/admin/field-officers)",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F3 Field officer creation + district scoping",
+      "check": "field officer claims carry role + assignedDistricts",
+      "status": "PASS",
+      "evidence": "{\"role\":\"fieldOfficer\",\"stateCode\":\"TN\",\"assignedDistricts\":[\"Ernakulam\"]}"
+    },
+    {
+      "flow": "F3 Field officer creation + district scoping",
+      "check": "field officer document written",
+      "status": "PASS",
+      "evidence": "exists=true stateCode=TN"
+    },
+    {
+      "flow": "F3 Field officer creation + district scoping",
+      "check": "Field officer lists guards in an assigned district",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F3 Field officer creation + district scoping",
+      "check": "scoped roster returns the district guard",
+      "status": "PASS",
+      "evidence": "count=1"
+    },
+    {
+      "flow": "F3 Field officer creation + district scoping",
+      "check": "unassigned-district guard fixture exists",
+      "status": "PASS",
+      "evidence": "employees/BcmxY58W7bT6ZTpbkjdi (district=Thiruvananthapuram)"
+    },
+    {
+      "flow": "F3 Field officer creation + district scoping",
+      "check": "field officer cannot read an unassigned district (fixture present there)",
+      "status": "PASS",
+      "evidence": "HTTP 200, fixture leaked=false, roster=0"
+    },
+    {
+      "flow": "F3 Field officer creation + district scoping",
+      "check": "field officer token is rejected by admin-only routes",
+      "status": "PASS",
+      "evidence": "HTTP 403"
+    },
+    {
+      "flow": "F4 Client / site / duty point",
+      "check": "Admin creates a client (POST /api/admin/clients)",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F4 Client / site / duty point",
+      "check": "client document carries stateCode",
+      "status": "PASS",
+      "evidence": "TN"
+    },
+    {
+      "flow": "F4 Client / site / duty point",
+      "check": "Admin creates a site / duty point (POST /api/admin/sites)",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F4 Client / site / duty point",
+      "check": "site stores geofence coordinates",
+      "status": "PASS",
+      "evidence": "9.9312,76.2673"
+    },
+    {
+      "flow": "F4 Client / site / duty point",
+      "check": "duty points persist through the browser write path",
+      "status": "PASS",
+      "evidence": "[{\"id\":\"dp-1\",\"name\":\"Main Gate\",\"code\":\"MG-1\",\"active\":true,\"coverageMode\":\"roundClock\",\"dutyHours\":\"12\",\"shiftMode\":\"fixed\",\"shiftTemplates\":[],\"patrolPoints\":[]}]"
+    },
+    {
+      "flow": "F4 Client / site / duty point",
+      "check": "clientLocations write allowed for an admin (rules)",
+      "status": "PASS",
+      "evidence": "docs=1"
+    },
+    {
+      "flow": "F4 Client / site / duty point",
+      "check": "unauthenticated browser write is denied by firestore.rules",
+      "status": "PASS",
+      "evidence": "permission-denied (rules rejected the unauthenticated write)"
+    },
+    {
+      "flow": "F5 Work order upload + assignment",
+      "check": "Admin creates a work order (POST /api/admin/work-orders)",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F5 Work order upload + assignment",
+      "check": "work order stores assigned guards",
+      "status": "PASS",
+      "evidence": "[{\"employeeId\":\"CISS/TCS/2026-27/C904AB\",\"employeeDocId\":\"3TLwysZuUm0Y2NVfsCWN\",\"guardName\":\"E2E Guard\",\"phoneNumber\":\"9013173931\"}]"
+    },
+    {
+      "flow": "F5 Work order upload + assignment",
+      "check": "Admin lists work orders",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F5 Work order upload + assignment",
+      "check": "Field officer sees the work order roster",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F5 Work order upload + assignment",
+      "check": "Work-order file preview (POST /import/preview, CSV)",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F5 Work order upload + assignment",
+      "check": "preview parsed the uploaded rows with their values",
+      "status": "PASS",
+      "evidence": "rows=2 first={\"siteName\":\"Auto TCS Site c904ab\",\"district\":\"Ernakulam\",\"male\":2,\"female\":1}"
+    },
+    {
+      "flow": "F5 Work order upload + assignment",
+      "check": "Work-order import commit creates the exam duty",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F5 Work order upload + assignment",
+      "check": "TCS centres are auto-created from the work-order upload",
+      "status": "PASS",
+      "evidence": "sites=2"
+    },
+    {
+      "flow": "F5 Work order upload + assignment",
+      "check": "auto-created TCS site carries client, district and coordinate status",
+      "status": "PASS",
+      "evidence": "{\"clientName\":\"TCS\",\"district\":\"Ernakulam\",\"coordinateStatus\":\"geocoded\",\"geofenceRadiusMeters\":150}"
+    },
+    {
+      "flow": "F6 Notifications to guards and field officers",
+      "check": "Guard registers an FCM token (POST /api/mobile/token)",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F6 Notifications to guards and field officers",
+      "check": "Admin broadcasts to guards (API call without a `data` payload)",
+      "status": "PASS",
+      "evidence": "HTTP 200 — {\"success\":true,\"notifId\":\"3953c9c8-ac15-41db-9986-493c45c4dbb2\",\"savedToFirestore\":true,\"recipientCount\":1,\"fcmDelivered\":false,\"fcmWarning\":\"Push delivery partially failed: guards: Credential implementation provided to initializeApp() via the \\\"credential\\\" property failed to fetch a valid Google OAuth2 access token … — src/app/api/admin/notifications/send/route.ts:151 writes `data: data || undefined` and Firestore rejects undefined values"
+    },
+    {
+      "flow": "F6 Notifications to guards and field officers",
+      "check": "guard notification document written",
+      "status": "PASS",
+      "evidence": "docs=1 — broadcast reported success without a document"
+    },
+    {
+      "flow": "F6 Notifications to guards and field officers",
+      "check": "Guard broadcast succeeds when an empty `data` object is supplied",
+      "status": "PASS",
+      "evidence": "HTTP 200 — {\"success\":true,\"notifId\":\"59240e45-bfd5-4c6f-9d72-ca7a70ba1f6b\",\"savedToFirestore\":true,\"recipientCount\":1,\"fcmDelivered\":false,\"fcmWarning\":\"Push delivery partially failed: guards: Credential implementation provided to initializeApp() via the \\\"credential\\\" property failed to fetch a valid Google OAuth2 access token … (isolates the undefined-field defect)"
+    },
+    {
+      "flow": "F6 Notifications to guards and field officers",
+      "check": "guard notification document written (with data)",
+      "status": "PASS",
+      "evidence": "docs=2"
+    },
+    {
+      "flow": "F6 Notifications to guards and field officers",
+      "check": "Admin broadcasts to field officers (API call without a `data` payload)",
+      "status": "PASS",
+      "evidence": "HTTP 200 — {\"success\":true,\"notifId\":\"785dcf7a-f924-4956-a1f1-54fc6202586a\",\"savedToFirestore\":true,\"recipientCount\":1,\"fcmDelivered\":false,\"fcmWarning\":\"Push delivery partially failed: field_officers: Credential implementation provided to initializeApp() via the \\\"credential\\\" property failed to fetch a valid Google OAuth2 acces…"
+    },
+    {
+      "flow": "F6 Notifications to guards and field officers",
+      "check": "field officer notification document written",
+      "status": "PASS",
+      "evidence": "docs=1 — broadcast reported success without a document"
+    },
+    {
+      "flow": "F6 Notifications to guards and field officers",
+      "check": "field officer broadcast with `data: {}` writes the notification",
+      "status": "PASS",
+      "evidence": "HTTP 200, docs=1"
+    },
+    {
+      "flow": "F6 Notifications to guards and field officers",
+      "check": "Guard reads the notification inbox (GET /api/mobile/notifications)",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F6 Notifications to guards and field officers",
+      "check": "Actual FCM push delivery",
+      "status": "BLOCKED",
+      "evidence": "no FCM emulator exists; route is best-effort and records fcmErrors"
+    },
+    {
+      "flow": "F7 Training material upload + assignment",
+      "check": "training material uploaded to Cloud Storage (emulator)",
+      "status": "PASS",
+      "evidence": "training/modules/e2e-c904ab/handbook.pdf (33 bytes)"
+    },
+    {
+      "flow": "F7 Training material upload + assignment",
+      "check": "Admin creates a training module",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F7 Training material upload + assignment",
+      "check": "Admin assigns the module to a guard",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F7 Training material upload + assignment",
+      "check": "assignment count returned",
+      "status": "PASS",
+      "evidence": "{\"assigned\":1}"
+    },
+    {
+      "flow": "F7 Training material upload + assignment",
+      "check": "Guard sees assigned training (GET /api/guard/training)",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F7 Training material upload + assignment",
+      "check": "trainingAssignments document written",
+      "status": "PASS",
+      "evidence": "docs=1"
+    },
+    {
+      "flow": "F7 Training material upload + assignment",
+      "check": "Guard acknowledges the module",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F7 Training material upload + assignment",
+      "check": "assignment status advances past 'assigned'",
+      "status": "PASS",
+      "evidence": "viewed"
+    },
+    {
+      "flow": "F8 Payslips",
+      "check": "Guard payslip list route is live",
+      "status": "PASS",
+      "evidence": "HTTP 200 — {\"payslips\":[]}"
+    },
+    {
+      "flow": "F8 Payslips",
+      "check": "Admin payslip list route is live",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F8 Payslips",
+      "check": "Admin payroll cycles route is live",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F8 Payslips",
+      "check": "Guard leave route is live",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F9 Database integrity + rules",
+      "check": "collection reachable + written: regions",
+      "status": "PASS",
+      "evidence": "docs(sample)=1"
+    },
+    {
+      "flow": "F9 Database integrity + rules",
+      "check": "collection reachable + written: regionConnections",
+      "status": "PASS",
+      "evidence": "docs(sample)=1"
+    },
+    {
+      "flow": "F9 Database integrity + rules",
+      "check": "collection reachable + written: employees",
+      "status": "PASS",
+      "evidence": "docs(sample)=1"
+    },
+    {
+      "flow": "F9 Database integrity + rules",
+      "check": "collection reachable + written: fieldOfficers",
+      "status": "PASS",
+      "evidence": "docs(sample)=1"
+    },
+    {
+      "flow": "F9 Database integrity + rules",
+      "check": "collection reachable + written: clients",
+      "status": "PASS",
+      "evidence": "docs(sample)=1"
+    },
+    {
+      "flow": "F9 Database integrity + rules",
+      "check": "collection reachable + written: sites",
+      "status": "PASS",
+      "evidence": "docs(sample)=1"
+    },
+    {
+      "flow": "F9 Database integrity + rules",
+      "check": "collection reachable + written: clientLocations",
+      "status": "PASS",
+      "evidence": "docs(sample)=1"
+    },
+    {
+      "flow": "F9 Database integrity + rules",
+      "check": "collection reachable + written: workOrders",
+      "status": "PASS",
+      "evidence": "docs(sample)=1"
+    },
+    {
+      "flow": "F9 Database integrity + rules",
+      "check": "collection reachable + written: notifications",
+      "status": "PASS",
+      "evidence": "docs(sample)=1"
+    },
+    {
+      "flow": "F9 Database integrity + rules",
+      "check": "collection reachable + written: trainingModules",
+      "status": "PASS",
+      "evidence": "docs(sample)=1"
+    },
+    {
+      "flow": "F9 Database integrity + rules",
+      "check": "collection reachable + written: trainingAssignments",
+      "status": "PASS",
+      "evidence": "docs(sample)=1"
+    },
+    {
+      "flow": "F9 Database integrity + rules",
+      "check": "collection reachable + written: enrollments",
+      "status": "PASS",
+      "evidence": "docs(sample)=1"
+    },
+    {
+      "flow": "F9 Database integrity + rules",
+      "check": "region service account stored encrypted (iv/authTag/cipherText)",
+      "status": "PASS",
+      "evidence": "fields=cipherText,authTag,iv"
+    },
+    {
+      "flow": "F9 Database integrity + rules",
+      "check": "no plaintext private key on the connection document",
+      "status": "PASS",
+      "evidence": "clean"
+    },
+    {
+      "flow": "F9 Database integrity + rules",
+      "check": "unauthenticated API request rejected",
+      "status": "PASS",
+      "evidence": "HTTP 401"
+    },
+    {
+      "flow": "F9 Database integrity + rules",
+      "check": "unauthenticated browser read of employees denied by rules",
+      "status": "PASS",
+      "evidence": "permission-denied (rules rejected the unauthenticated read)"
+    },
+    {
+      "flow": "F10 Multi-state readiness (non-Kerala data)",
+      "check": "TN work-order file preview accepts a non-Kerala roster",
+      "status": "PASS",
+      "evidence": "HTTP 200 — {\"parserMode\":\"legacy-sheet\",\"suggestedExamName\":\"e2e tn c904ab\",\"suggestedExamCode\":\"e2e-tn-c904ab\",\"dateRange\":{\"from\":\"\",\"to\":\"\"},\"dates\":[\"\"],\"rows\":[{\"siteName\":\"TN Chennai Site c904ab\",\"district\":\"Chennai\",\"date\":\"\",\"maleGuardsRequired\":1,\"femaleGuardsRequired\":1,\"examName\":\"e2e tn c904ab\",\"examCode\":\"e2e-tn-c904…"
+    },
+    {
+      "flow": "F10 Multi-state readiness (non-Kerala data)",
+      "check": "Tamil Nadu district names survive the import parser",
+      "status": "PASS",
+      "evidence": "districts=[\"Chennai\",\"Coimbatore\",\"Chennai\",\"Coimbatore\"] — non-Kerala district names survive the parser verbatim; note they are NOT canonicalised (districts.ts canonicalises Kerala names only), so spelling variants would fragment district-scoped queries"
+    },
+    {
+      "flow": "F10 Multi-state readiness (non-Kerala data)",
+      "check": "public region registry answers",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F11 Attendance marking",
+      "check": "Guard marks attendance IN (POST /api/attendance/submit)",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F11 Attendance marking",
+      "check": "attendance log persisted under the idempotency key",
+      "status": "PASS",
+      "evidence": "attendanceLogs/fbe6e05c-2c11-48be-8e33-9eaf9e3fa191"
+    },
+    {
+      "flow": "F11 Attendance marking",
+      "check": "attendance log carries employee/site/status/photo/actor",
+      "status": "PASS",
+      "evidence": "{\"employeeDocId\":\"3TLwysZuUm0Y2NVfsCWN\",\"siteId\":\"dM8E88Kd78XY8DpT63jz\",\"status\":\"In\",\"photo\":\"employees/3TLwysZuUm0Y2NVfsCWN/attendance/abc5759b-12a9-4ca3-8e7b-724afea61ea3/photo.jpg\",\"submittedByUid\":\"NAlkHJXKl5uSDDZKT7jXJyiauPyL\",\"attendanceDate\":\"2026-10-27\"}"
+    },
+    {
+      "flow": "F11 Attendance marking",
+      "check": "attendanceState reflects IN + open session",
+      "status": "PASS",
+      "evidence": "{\"lastStatus\":\"In\",\"openSessionId\":\"fbe6e05c-2c11-48be-8e33-9eaf9e3fa191\"}"
+    },
+    {
+      "flow": "F11 Attendance marking",
+      "check": "open attendance session persisted",
+      "status": "PASS",
+      "evidence": "open sessions=1"
+    },
+    {
+      "flow": "F11 Attendance marking",
+      "check": "Guard marks attendance OUT",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F11 Attendance marking",
+      "check": "attendanceState flips to OUT and clears the open session",
+      "status": "PASS",
+      "evidence": "{\"lastStatus\":\"Out\"}"
+    },
+    {
+      "flow": "F11 Attendance marking",
+      "check": "IN session closed with an out log id",
+      "status": "PASS",
+      "evidence": "{\"status\":\"closed\",\"outLogId\":\"394f65f0-446d-480b-973f-80c21d63c71a\"}"
+    },
+    {
+      "flow": "F12 Employee record edit",
+      "check": "employee edit persists the changed field",
+      "status": "PASS",
+      "evidence": "E2E Guard Edited c904ab"
+    },
+    {
+      "flow": "F12 Employee record edit",
+      "check": "employee edit does not drop identity fields",
+      "status": "PASS",
+      "evidence": "{\"employeeId\":\"CISS/TCS/2026-27/C904AB\",\"status\":\"Active\"}"
+    },
+    {
+      "flow": "F13 Client portal user creation",
+      "check": "Admin creates a client portal user",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F13 Client portal user creation",
+      "check": "client user claims are role=client + clientId",
+      "status": "PASS",
+      "evidence": "{\"role\":\"client\",\"clientId\":\"kiH2W1XzVCGSCyJHC8EW\",\"clientName\":\"E2E Client c904ab\",\"loginId\":\"e2e-client-c904ab\",\"stateCode\":\"TN\"}"
+    },
+    {
+      "flow": "F13 Client portal user creation",
+      "check": "clientUsers document persisted",
+      "status": "PASS",
+      "evidence": "docs=1"
+    },
+    {
+      "flow": "F14 Guard evaluation",
+      "check": "Admin records a guard evaluation",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F14 Guard evaluation",
+      "check": "evaluation persists employee, period, score and evaluator",
+      "status": "PASS",
+      "evidence": "{\"employeeId\":\"3TLwysZuUm0Y2NVfsCWN\",\"period\":\"2026-10\",\"totalScore\":50,\"normalizedScore\":100,\"evaluatedBy\":\"wgNV3bA2kZJHXzn4mf6vT4p3tJWc\"}"
+    },
+    {
+      "flow": "F15 Bulk payslips",
+      "check": "Admin bulk-uploads a payslip PDF",
+      "status": "PASS",
+      "evidence": "HTTP 201"
+    },
+    {
+      "flow": "F15 Bulk payslips",
+      "check": "payslip matched to the employee and stored",
+      "status": "PASS",
+      "evidence": "{\"id\":\"7bad971a-f1e4-4e43-8729-c0450ddc3d18\",\"employeeDocId\":\"3TLwysZuUm0Y2NVfsCWN\",\"employeeId\":\"CISS/TCS/2026-27/C904AB\",\"employeeName\":\"E2E Guard Edited c904ab\",\"period\":\"2026-01\",\"fileName\":\"payslip-c904ab.pdf\",\"storagePath\":\"employees/3TLwysZuUm0Y2NVfsCWN/payslips/2026-01/f2c5080d-d7d8-40c7-a498-a65ad6a08caf.pdf\",\"sizeBytes\":719,\"parseMethod\":\"employeeId\",\"dryRun\":false}"
+    },
+    {
+      "flow": "F15 Bulk payslips",
+      "check": "payslipDocuments row carries employee, period and storage path",
+      "status": "PASS",
+      "evidence": "{\"employeeDocId\":\"3TLwysZuUm0Y2NVfsCWN\",\"employeeId\":\"CISS/TCS/2026-27/C904AB\",\"employeeName\":\"E2E Guard Edited c904ab\",\"clientName\":\"E2E Client\",\"period\":\"2026-01\",\"fileName\":\"payslip-c904ab.pdf\",\"storagePath\":\"employees/3TLwysZuUm0Y2NVfsCWN/payslips/2026-01/f2c5080d-d7d8-40c7-a498-a65ad6a08caf.pdf\",\"sizeBytes\":719,\"uploadedBy\":\"wgNV3bA2kZJHXzn4mf6vT4p3tJWc\",\"uploadedByEmail\":\"tn-admin-c904ab@example.test\",\"parseMethod\":\"employeeId\",\"createdAt\":{\"_seconds\":1793082855,\"_nanoseconds\":481000000}}"
+    },
+    {
+      "flow": "F15 Bulk payslips",
+      "check": "payslip PDF object stored in the bucket",
+      "status": "PASS",
+      "evidence": "employees/3TLwysZuUm0Y2NVfsCWN/payslips/2026-01/f2c5080d-d7d8-40c7-a498-a65ad6a08caf.pdf"
+    },
+    {
+      "flow": "F15 Bulk payslips",
+      "check": "Guard lists their payslips",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F15 Bulk payslips",
+      "check": "uploaded payslip appears in the guard's list",
+      "status": "PASS",
+      "evidence": "ids=1"
+    },
+    {
+      "flow": "F15 Bulk payslips",
+      "check": "Guard downloads the PDF (content-type + %PDF magic)",
+      "status": "PASS",
+      "evidence": "HTTP 200, application/pdf, 719 bytes"
+    },
+    {
+      "flow": "F15 Bulk payslips",
+      "check": "Non-guard token cannot download a payslip",
+      "status": "PASS",
+      "evidence": "HTTP 403"
+    },
+    {
+      "flow": "F15 Bulk payslips",
+      "check": "Unmatched payslip is reported without being stored",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "flow": "F15 Bulk payslips",
+      "check": "unmatched reason is returned for the admin",
+      "status": "PASS",
+      "evidence": "[{\"fileName\":\"junk.pdf\",\"reason\":\"no-identifier\",\"detail\":\"No employee id or name could be read from this PDF or its filename. Rename the file with the employee id (CISS/CLIENT/2025-26/123).\",\"extractedEmployeeId\":null,\"extractedName\":null}]"
+    }
+  ]
+}

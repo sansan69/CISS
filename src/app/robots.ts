@@ -22,7 +22,6 @@ export default function robots(): MetadataRoute.Robots {
           "/guard-login",
           "/leaderboard",
           "/patrol-activity",
-          "/payroll",
           "/profile/",
           "/record-attendance",
           "/settings",

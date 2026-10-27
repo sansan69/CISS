@@ -1,100 +1,132 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
-import { Download, Wallet } from "@phosphor-icons/react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useToast } from "@/hooks/use-toast";
-import { useAppAuth } from "@/context/auth-context";
+import { useCallback, useEffect, useState } from "react";
+import {
+  DownloadSimple as Download,
+  FileText,
+  SpinnerGap as Loader2,
+} from "@phosphor-icons/react";
 
-type Payslip = {
+import { authorizedFetch } from "@/lib/api-client";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useToast } from "@/hooks/use-toast";
+
+type PayslipRow = {
   id: string;
-  period?: string;
-  netPay?: number;
-  status?: string;
-  payslipUrl?: string;
-  downloadUrl?: string;
-  createdAt?: { seconds: number };
+  period: string;
+  fileName: string;
+  sizeBytes: number;
+  createdAt?: string;
+  source?: "payroll" | "document";
 };
 
 export default function GuardPayslipsPage() {
-  const { user } = useAppAuth();
   const { toast } = useToast();
-  const [loading, setLoading] = useState(true);
-  const [payslips, setPayslips] = useState<Payslip[]>([]);
+  const [rows, setRows] = useState<PayslipRow[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [downloading, setDownloading] = useState<string | null>(null);
 
-  const loadPayslips = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
+  const load = useCallback(async () => {
+    setIsLoading(true);
     try {
-      const token = await user.getIdToken();
-      const res = await fetch("/api/guard/payslips", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Could not load payslips.");
-      setPayslips(data.payslips ?? []);
+      const response = await authorizedFetch("/api/guard/payslips");
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || "Could not load payslips.");
+      setRows(body.payslips ?? []);
     } catch (error: any) {
-      toast({
-        title: "Could not load payslips",
-        description: error?.message || "Please try again.",
-        variant: "destructive",
-      });
+      toast({ title: "Payslips", description: error?.message, variant: "destructive" });
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
-  }, [toast, user]);
+  }, [toast]);
 
   useEffect(() => {
-    void loadPayslips();
-  }, [loadPayslips]);
+    void load();
+  }, [load]);
+
+  const download = async (row: PayslipRow) => {
+    setDownloading(row.id);
+    try {
+      const response = await authorizedFetch(`/api/guard/payslips/${row.id}/payslip`);
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || "Could not download this payslip.");
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `payslip-${row.period}.pdf`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (error: any) {
+      toast({ title: "Download failed", description: error?.message, variant: "destructive" });
+    } finally {
+      setDownloading(null);
+    }
+  };
 
   return (
-    <div className="space-y-4 p-4 pb-6">
+    <div className="space-y-6">
       <div>
-        <p className="text-sm text-muted-foreground">Salary records</p>
-        <h1 className="text-lg font-bold text-foreground">My Payslips</h1>
+        <h1 className="text-2xl font-semibold">Salary slips</h1>
+        <p className="text-sm text-muted-foreground">
+          Payslips uploaded by your administrator. Download a PDF copy for your records.
+        </p>
       </div>
 
-      {loading ? (
-        <div className="space-y-3">
-          <Skeleton className="h-28 rounded-2xl" />
-          <Skeleton className="h-28 rounded-2xl" />
-        </div>
-      ) : payslips.length === 0 ? (
-        <Card className="rounded-2xl border-0 shadow-brand-sm">
-          <CardContent className="py-14 text-center">
-            <Wallet className="mx-auto h-10 w-10 text-muted-foreground/70" />
-            <p className="mt-3 text-sm font-medium text-muted-foreground">No payslips available yet</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          {payslips.map((payslip) => (
-            <Card key={payslip.id} className="rounded-2xl border-0 shadow-brand-sm">
-              <CardContent className="flex items-center justify-between gap-3 p-4">
-                <div>
-                  <p className="text-sm font-semibold text-foreground">{payslip.period || "Payslip"}</p>
-                  <p className="text-xs text-muted-foreground capitalize">
-                    {payslip.status || "pending"} · Net Pay {typeof payslip.netPay === "number" ? `₹${payslip.netPay.toLocaleString("en-IN")}` : "—"}
-                  </p>
-                </div>
-                {(payslip.payslipUrl || payslip.downloadUrl) ? (
-                  <Link href={payslip.payslipUrl || payslip.downloadUrl || "#"} target="_blank" className="inline-flex items-center rounded-xl bg-primary px-3 py-2 text-sm font-medium text-white">
-                    <Download className="mr-1.5 h-4 w-4" />
-                    Open
-                  </Link>
-                ) : (
-                  <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                    Waiting
-                  </span>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <FileText className="h-4 w-4" /> My payslips
+          </CardTitle>
+          <CardDescription>Only slips linked to your employee record are shown.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : rows.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No payslips have been uploaded yet.</p>
+          ) : (
+            <ul className="divide-y">
+              {rows.map((row) => (
+                <li key={row.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                  <div>
+                    <p className="text-sm font-medium">Payslip · {row.period}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {row.sizeBytes > 0
+                        ? `${Math.max(1, Math.round(row.sizeBytes / 1024))} KB`
+                        : row.source === "payroll"
+                          ? "Payroll statement"
+                          : "PDF"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary">
+                      {row.source === "payroll" ? "Payroll" : row.period || "PDF"}
+                    </Badge>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => download(row)}
+                      disabled={downloading === row.id}
+                    >
+                      {downloading === row.id ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Download className="mr-2 h-4 w-4" />
+                      )}
+                      Download
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

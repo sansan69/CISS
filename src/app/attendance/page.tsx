@@ -914,8 +914,10 @@ export default function AttendancePage() {
     method: 'qr' | 'phone' | 'employeeId' | 'authenticated',
     value?: string,
   ) => {
-    const authToken =
-      method === 'authenticated' && user ? await user.getIdToken() : null;
+    // Send the signed-in guard's token for every method so an assisted
+    // submission is attributed to this account. A signed-out kiosk can still
+    // scan a QR badge; weak identifiers require sign-in server-side.
+    const authToken = user ? await user.getIdToken() : null;
     const response = await fetch('/api/public/attendance/identify', {
       method: 'POST',
       cache: 'no-store',
@@ -1836,6 +1838,13 @@ export default function AttendancePage() {
                 <AccordionTrigger>QR not working? Use employee ID or phone</AccordionTrigger>
                 <AccordionContent>
                   <div className="grid gap-3 pb-1">
+                    {!user && (
+                      <p className="rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
+                        Shared device: scan the guard&apos;s QR badge. Employee ID,
+                        phone number and resource ID need a signed-in guard so the
+                        submission can be attributed.
+                      </p>
+                    )}
                     <div className="space-y-2">
                       <Label htmlFor="manual-employee-id">Employee ID</Label>
                       <Input id="manual-employee-id" placeholder="e.g. CISS/TCS/..." value={manualEmployeeId} onChange={(e) => setManualEmployeeId(e.target.value)} />

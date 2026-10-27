@@ -22,6 +22,13 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: process.cwd(),
   outputFileTracingIncludes: {
     "/*": ["./node_modules/pdfjs-dist/standard_fonts/**/*"],
+    // The regional database-setup route reads the repository rules/index
+    // manifest at runtime to deploy them to the state's Firebase project.
+    "/api/super-admin/regions/**": [
+      "./firestore.rules",
+      "./storage.rules",
+      "./firestore.indexes.json",
+    ],
   },
   serverExternalPackages: ["@napi-rs/canvas", "pdfjs-dist"],
   poweredByHeader: false,

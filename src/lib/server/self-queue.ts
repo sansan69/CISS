@@ -40,6 +40,65 @@ export interface ChunkResult {
   processed?: number;
 }
 
+// ── Re-queue origin ────────────────────────────────────────────────────────────
+
+/**
+ * Environment variables consulted for the canonical application origin, in
+ * priority order: an explicit server-side override, the public deployment URL
+ * used by the mobile/guard-login APIs, and finally the Vercel-provided
+ * production/deployment hostnames (assigned by the platform, never by a
+ * request). Nothing here is derived from the incoming request.
+ */
+const APP_ORIGIN_ENV_KEYS = [
+  "APP_URL",
+  "NEXT_PUBLIC_APP_URL",
+  "VERCEL_PROJECT_PRODUCTION_URL",
+  "VERCEL_URL",
+] as const;
+
+let warnedMissingOrigin = false;
+
+function configuredOrigin(value: string | undefined): string | null {
+  const configured = value?.trim();
+  if (!configured) return null;
+  // Vercel system variables carry a bare hostname; everything else may carry
+  // a scheme and path. Assume https for bare hostnames, then reject anything
+  // that is still not an https origin without credentials.
+  const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(configured)
+    ? configured
+    : `https://${configured}`;
+  try {
+    const url = new URL(candidate);
+    if (url.protocol !== "https:") return null;
+    if (url.username || url.password) return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve the canonical origin used for self re-queuing from configuration.
+ *
+ * The origin must never come from the incoming request: `Host` is
+ * attacker-controllable on many deployments, and the re-queue forwards
+ * `Authorization: Bearer $CRON_SECRET`, so a spoofed `Host` would hand the cron
+ * secret to an arbitrary server. Only an absolute https origin without
+ * credentials is accepted.
+ *
+ * @returns the origin (e.g. `https://cisskerala.site`) or `null` when no usable
+ * origin is configured.
+ */
+export function resolveConfiguredAppOrigin(
+  env: Record<string, string | undefined> = process.env,
+): string | null {
+  for (const key of APP_ORIGIN_ENV_KEYS) {
+    const origin = configuredOrigin(env[key]);
+    if (origin) return origin;
+  }
+  return null;
+}
+
 // ── Runner ─────────────────────────────────────────────────────────────────────
 
 /**
@@ -202,18 +261,30 @@ export async function runChunked<T>(
     }
   }
 
-  // Budget exhausted or max chunks hit — re-queue
-  if (selfUrl && cronSecret) {
-    try {
-      await fetch(selfUrl, {
-        headers: { authorization: `Bearer ${cronSecret}` },
-        signal: AbortSignal.timeout(10_000),
-      }).catch(() => {
-        // Re-queue fire-and-forget — next cron pass will re-claim
-        console.warn("[self-queue] Re-queue fetch failed; next cron pass will resume");
-      });
-    } catch {
-      // Ignore re-queue failures
+  // Budget exhausted or max chunks hit — re-queue.
+  // The destination is the configured canonical origin; when it is missing the
+  // invocation returns without re-querying and the next cron pass resumes.
+  if (cronSecret) {
+    const origin = resolveConfiguredAppOrigin();
+    if (!origin) {
+      if (!warnedMissingOrigin) {
+        warnedMissingOrigin = true;
+        console.warn(
+          "[self-queue] No configured APP_URL/NEXT_PUBLIC_APP_URL; skipping re-queue. The next cron pass will resume.",
+        );
+      }
+    } else if (selfUrl && isAllowedSelfUrl(selfUrl, origin)) {
+      try {
+        await fetch(selfUrl, {
+          headers: { authorization: `Bearer ${cronSecret}` },
+          signal: AbortSignal.timeout(10_000),
+        }).catch(() => {
+          // Re-queue fire-and-forget — next cron pass will re-claim
+          console.warn("[self-queue] Re-queue fetch failed; next cron pass will resume");
+        });
+      } catch {
+        // Ignore re-queue failures
+      }
     }
   }
 
@@ -221,12 +292,46 @@ export async function runChunked<T>(
 }
 
 /**
- * Build the self URL for re-queuing from the incoming request.
+ * Guard the re-queue destination: it must be an absolute https URL on the
+ * configured origin, or the CRON_SECRET would be sent somewhere else.
+ */
+function isAllowedSelfUrl(selfUrl: string, origin: string): boolean {
+  try {
+    const target = new URL(selfUrl);
+    return (
+      target.protocol === "https:" &&
+      !target.username &&
+      !target.password &&
+      target.origin === new URL(origin).origin
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Build the self URL for re-queuing.
+ *
+ * The origin is taken from configuration (see `resolveConfiguredAppOrigin`),
+ * never from the request URL — the first argument is retained only so existing
+ * call sites keep their signature and is intentionally ignored. When no origin
+ * is configured this returns an empty string, which the runner treats as "do
+ * not re-queue"; the next cron pass picks the work up instead.
  */
 export function buildSelfUrl(
-  requestUrl: string,
+  _requestUrl: string,
   pathname: string,
 ): string {
-  const url = new URL(requestUrl);
-  return `${url.origin}${pathname}`;
+  const origin = resolveConfiguredAppOrigin();
+  if (!origin) {
+    if (!warnedMissingOrigin) {
+      warnedMissingOrigin = true;
+      console.warn(
+        "[self-queue] No configured APP_URL/NEXT_PUBLIC_APP_URL; self re-queue disabled.",
+      );
+    }
+    return "";
+  }
+  const path = pathname.startsWith("/") ? pathname : `/${pathname}`;
+  return `${origin}${path}`;
 }

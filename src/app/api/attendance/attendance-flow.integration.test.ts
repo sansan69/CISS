@@ -2,6 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildShiftTemplates } from "@/lib/shift-utils";
 import { generateAttendanceVerificationToken } from "@/lib/server/attendance-verification-token";
+import { consumeAttendanceProof } from "@/lib/server/attendance-proofs";
+
+// These tests exercise the attendance write pipeline with a kiosk-style signed
+// badge. The single-use proof store has its own tests; here it is mocked so the
+// fake Firestore does not need to model the nonce lifecycle.
+vi.mock("@/lib/server/attendance-proofs", () => ({
+  registerAttendanceProof: vi.fn(async () => true),
+  consumeAttendanceProof: vi.fn(async () => true),
+}));
 
 type Filter = {
   field: string;
@@ -422,7 +431,7 @@ function buildAttendancePayload(args: {
     clientRequestId: attendanceAttemptId,
     attendanceVerificationToken: generateAttendanceVerificationToken({
       employeeDocId: args.employeeDocId,
-      method: "employeeId",
+      method: "qr",
     }),
   };
 }
@@ -1157,6 +1166,455 @@ describe("attendance flow integration", () => {
       siteClientName: "TCS",
       clientName: "TCS",
       crossClientRelief: true,
+    });
+  });
+
+  it("attributes assisted attendance to the signed-in guard who marked the colleague", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-23T13:25:00.000Z"));
+    const db = new FakeFirestore();
+
+    db.seed("employees", "emp-assisted", {
+      employeeId: "CISS/TCS/2026-27/900",
+      fullName: "Assisted Guard",
+      phoneNumber: "7777777000",
+      clientName: "TCS",
+      district: "Ernakulam",
+      status: "Active",
+      guardAuthUid: "guard-a-uid",
+    });
+    db.seed("sites", "site-assisted", {
+      siteName: "Assisted Site",
+      clientName: "TCS",
+      district: "Ernakulam",
+      lat: 9.981,
+      lng: 76.281,
+      geofenceRadiusMeters: 250,
+      strictGeofence: true,
+      shiftMode: "fixed",
+      shiftPattern: "2x12",
+      shiftTemplates: buildShiftTemplates("2x12"),
+      dutyPoints: [],
+    });
+
+    vi.doMock("@/lib/firebaseAdmin", () => ({ db }));
+    vi.doMock("@/lib/server/audit", () => ({
+      buildServerAuditEvent: vi.fn(() => ({ event: "attendance_submitted" })),
+    }));
+    vi.doMock("@/lib/server/monitoring", () => ({
+      SYSTEM_METRIC_NAMES: {
+        attendanceSubmitSuccess: "attendance_submit_success",
+        attendanceSubmitFailure: "attendance_submit_failure",
+      },
+      incrementSystemMetric: vi.fn(async () => undefined),
+    }));
+    vi.doMock("@/lib/work-orders/assignment-match", () => ({
+      isAssignedGuardMatch: vi.fn(() => true),
+    }));
+    vi.doMock("firebase-admin/firestore", () => ({
+      FieldValue: { delete: () => deleteSentinel },
+      Timestamp: {
+        now: () => new FakeTimestamp(new Date(Date.now())),
+        fromDate: (date: Date) => new FakeTimestamp(date),
+      },
+    }));
+    vi.doMock("@/lib/server/auth", () => ({
+      verifyRequestAuth: vi.fn(async (request: Request) => decodeTokenFromRequest(request)),
+    }));
+
+    const { POST } = (await import("./submit/route")) as any;
+    const payload = buildAttendancePayload({
+      employeeDocId: "emp-assisted",
+      employeeId: "CISS/TCS/2026-27/900",
+      employeeName: "Assisted Guard",
+      employeePhoneNumber: "7777777000",
+      clientName: "TCS",
+      district: "Ernakulam",
+      siteId: "site-assisted",
+      siteName: "Assisted Site",
+      siteCoords: { lat: 9.981, lng: 76.281 },
+      locationCoords: { lat: 9.9811, lon: 76.2811, accuracyMeters: 8 },
+      locationText: "Assisted Site",
+      status: "In",
+      reportedAtClient: "2026-05-23T13:24:00.000Z",
+      shiftCode: "day",
+      shiftLabel: "Day Shift",
+      shiftStartTime: "08:00",
+      shiftEndTime: "20:00",
+    });
+    payload.attendanceVerificationToken = generateAttendanceVerificationToken({
+      employeeDocId: "emp-assisted",
+      method: "qr",
+      actorUid: "guard-uid",
+    });
+
+    const response = await POST(
+      new Request("https://example.com/api/attendance/submit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer guard:emp-b",
+        },
+        body: JSON.stringify(payload),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(db.listDocs("attendanceLogs")[0].data).toMatchObject({
+      employeeDocId: "emp-assisted",
+      assistedSubmission: true,
+      markedByUid: "guard-uid",
+      attendanceMethod: "qr",
+    });
+  });
+
+  it("rejects an assisted submission without an identity proof", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-23T13:25:00.000Z"));
+    const db = new FakeFirestore();
+    db.seed("employees", "emp-assisted", {
+      employeeId: "CISS/TCS/2026-27/900",
+      fullName: "Assisted Guard",
+      phoneNumber: "7777777000",
+      clientName: "TCS",
+      district: "Ernakulam",
+      status: "Active",
+      guardAuthUid: "guard-a-uid",
+    });
+    db.seed("sites", "site-assisted", {
+      siteName: "Assisted Site",
+      clientName: "TCS",
+      district: "Ernakulam",
+      lat: 9.981,
+      lng: 76.281,
+      geofenceRadiusMeters: 250,
+      strictGeofence: true,
+      shiftMode: "fixed",
+      shiftPattern: "2x12",
+      shiftTemplates: buildShiftTemplates("2x12"),
+      dutyPoints: [],
+    });
+    vi.doMock("@/lib/firebaseAdmin", () => ({ db }));
+    vi.doMock("@/lib/server/audit", () => ({
+      buildServerAuditEvent: vi.fn(() => ({ event: "attendance_submitted" })),
+    }));
+    vi.doMock("@/lib/server/monitoring", () => ({
+      SYSTEM_METRIC_NAMES: {
+        attendanceSubmitSuccess: "attendance_submit_success",
+        attendanceSubmitFailure: "attendance_submit_failure",
+      },
+      incrementSystemMetric: vi.fn(async () => undefined),
+    }));
+    vi.doMock("@/lib/work-orders/assignment-match", () => ({
+      isAssignedGuardMatch: vi.fn(() => true),
+    }));
+    vi.doMock("firebase-admin/firestore", () => ({
+      FieldValue: { delete: () => deleteSentinel },
+      Timestamp: {
+        now: () => new FakeTimestamp(new Date(Date.now())),
+        fromDate: (date: Date) => new FakeTimestamp(date),
+      },
+    }));
+    vi.doMock("@/lib/server/auth", () => ({
+      verifyRequestAuth: vi.fn(async (request: Request) => decodeTokenFromRequest(request)),
+    }));
+
+    const { POST } = (await import("./submit/route")) as any;
+    const payload = buildAttendancePayload({
+      employeeDocId: "emp-assisted",
+      employeeId: "CISS/TCS/2026-27/900",
+      employeeName: "Assisted Guard",
+      employeePhoneNumber: "7777777000",
+      clientName: "TCS",
+      district: "Ernakulam",
+      siteId: "site-assisted",
+      siteName: "Assisted Site",
+      siteCoords: { lat: 9.981, lng: 76.281 },
+      locationCoords: { lat: 9.9811, lon: 76.2811, accuracyMeters: 8 },
+      locationText: "Assisted Site",
+      status: "In",
+      reportedAtClient: "2026-05-23T13:24:00.000Z",
+      shiftCode: "day",
+      shiftLabel: "Day Shift",
+      shiftStartTime: "08:00",
+      shiftEndTime: "20:00",
+    });
+    delete (payload as Record<string, unknown>).attendanceVerificationToken;
+
+    const response = await POST(
+      new Request("https://example.com/api/attendance/submit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer guard:emp-b",
+        },
+        body: JSON.stringify(payload),
+      }),
+    );
+
+    expect(response.status).toBe(401);
+  });
+
+  it("returns the prior duplicate result on a retry instead of rejecting a consumed proof", async () => {
+    vi.mocked(consumeAttendanceProof).mockReset();
+    vi.mocked(consumeAttendanceProof).mockResolvedValue(true);
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-23T13:25:00.000Z"));
+    const db = new FakeFirestore();
+    db.seed("employees", "emp-retry", {
+      employeeId: "CISS/TCS/2026-27/901",
+      fullName: "Retry Guard",
+      phoneNumber: "7777777001",
+      clientName: "TCS",
+      district: "Ernakulam",
+      status: "Active",
+    });
+    db.seed("sites", "site-retry", {
+      siteName: "Retry Site",
+      clientName: "TCS",
+      district: "Ernakulam",
+      lat: 9.981,
+      lng: 76.281,
+      geofenceRadiusMeters: 250,
+      strictGeofence: true,
+      shiftMode: "fixed",
+      shiftPattern: "2x12",
+      shiftTemplates: buildShiftTemplates("2x12"),
+      dutyPoints: [],
+    });
+    vi.doMock("@/lib/firebaseAdmin", () => ({ db }));
+    vi.doMock("@/lib/server/audit", () => ({
+      buildServerAuditEvent: vi.fn(() => ({ event: "attendance_submitted" })),
+    }));
+    vi.doMock("@/lib/server/monitoring", () => ({
+      SYSTEM_METRIC_NAMES: {
+        attendanceSubmitSuccess: "attendance_submit_success",
+        attendanceSubmitFailure: "attendance_submit_failure",
+      },
+      incrementSystemMetric: vi.fn(async () => undefined),
+    }));
+    vi.doMock("@/lib/work-orders/assignment-match", () => ({
+      isAssignedGuardMatch: vi.fn(() => true),
+    }));
+    vi.doMock("firebase-admin/firestore", () => ({
+      FieldValue: { delete: () => deleteSentinel },
+      Timestamp: {
+        now: () => new FakeTimestamp(new Date(Date.now())),
+        fromDate: (date: Date) => new FakeTimestamp(date),
+      },
+    }));
+
+    const payload = buildAttendancePayload({
+      employeeDocId: "emp-retry",
+      employeeId: "CISS/TCS/2026-27/901",
+      employeeName: "Retry Guard",
+      employeePhoneNumber: "7777777001",
+      clientName: "TCS",
+      district: "Ernakulam",
+      siteId: "site-retry",
+      siteName: "Retry Site",
+      siteCoords: { lat: 9.981, lng: 76.281 },
+      locationCoords: { lat: 9.9811, lon: 76.2811, accuracyMeters: 8 },
+      locationText: "Retry Site",
+      status: "In",
+      reportedAtClient: "2026-05-23T13:24:00.000Z",
+      shiftCode: "day",
+      shiftLabel: "Day Shift",
+      shiftStartTime: "08:00",
+      shiftEndTime: "20:00",
+    });
+
+    // The first attempt already committed and its response was lost.
+    db.seed("attendanceLogs", payload.clientRequestId, {
+      employeeDocId: "emp-retry",
+      employeeId: "CISS/TCS/2026-27/901",
+      status: "In",
+      processedClientRequestId: payload.clientRequestId,
+    });
+
+    const { POST } = (await import("./submit/route")) as any;
+    const response = await POST(
+      new Request("https://example.com/api/attendance/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.duplicate).toBe(true);
+    expect(consumeAttendanceProof).not.toHaveBeenCalled();
+    expect(db.listDocs("attendanceLogs").filter((doc) => doc.id === payload.clientRequestId)).toHaveLength(1);
+  });
+
+  it("rejects a request id that already belongs to another guard", async () => {
+    vi.mocked(consumeAttendanceProof).mockReset();
+    vi.mocked(consumeAttendanceProof).mockResolvedValue(true);
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-23T13:25:00.000Z"));
+    const db = new FakeFirestore();
+    db.seed("employees", "emp-collision", {
+      employeeId: "CISS/TCS/2026-27/902",
+      fullName: "Collision Guard",
+      phoneNumber: "7777777002",
+      clientName: "TCS",
+      district: "Ernakulam",
+      status: "Active",
+    });
+    db.seed("sites", "site-collision", {
+      siteName: "Collision Site",
+      clientName: "TCS",
+      district: "Ernakulam",
+      lat: 9.981,
+      lng: 76.281,
+      geofenceRadiusMeters: 250,
+      strictGeofence: true,
+      shiftMode: "fixed",
+      shiftPattern: "2x12",
+      shiftTemplates: buildShiftTemplates("2x12"),
+      dutyPoints: [],
+    });
+    vi.doMock("@/lib/firebaseAdmin", () => ({ db }));
+    vi.doMock("@/lib/server/audit", () => ({
+      buildServerAuditEvent: vi.fn(() => ({ event: "attendance_submitted" })),
+    }));
+    vi.doMock("@/lib/server/monitoring", () => ({
+      SYSTEM_METRIC_NAMES: {
+        attendanceSubmitSuccess: "attendance_submit_success",
+        attendanceSubmitFailure: "attendance_submit_failure",
+      },
+      incrementSystemMetric: vi.fn(async () => undefined),
+    }));
+    vi.doMock("@/lib/work-orders/assignment-match", () => ({
+      isAssignedGuardMatch: vi.fn(() => true),
+    }));
+    vi.doMock("firebase-admin/firestore", () => ({
+      FieldValue: { delete: () => deleteSentinel },
+      Timestamp: {
+        now: () => new FakeTimestamp(new Date(Date.now())),
+        fromDate: (date: Date) => new FakeTimestamp(date),
+      },
+    }));
+
+    const payload = buildAttendancePayload({
+      employeeDocId: "emp-collision",
+      employeeId: "CISS/TCS/2026-27/902",
+      employeeName: "Collision Guard",
+      employeePhoneNumber: "7777777002",
+      clientName: "TCS",
+      district: "Ernakulam",
+      siteId: "site-collision",
+      siteName: "Collision Site",
+      siteCoords: { lat: 9.981, lng: 76.281 },
+      locationCoords: { lat: 9.9811, lon: 76.2811, accuracyMeters: 8 },
+      locationText: "Collision Site",
+      status: "In",
+      reportedAtClient: "2026-05-23T13:24:00.000Z",
+      shiftCode: "day",
+      shiftLabel: "Day Shift",
+      shiftStartTime: "08:00",
+      shiftEndTime: "20:00",
+    });
+
+    db.seed("attendanceLogs", payload.clientRequestId, {
+      employeeDocId: "emp-someone-else",
+      status: "In",
+    });
+
+    const { POST } = (await import("./submit/route")) as any;
+    const response = await POST(
+      new Request("https://example.com/api/attendance/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }),
+    );
+
+    expect(response.status).toBe(409);
+  });
+
+  it("accepts a site whose coordinates are stored as latitude/longitude", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-23T13:25:00.000Z"));
+    const db = new FakeFirestore();
+    db.seed("employees", "emp-latlng", {
+      employeeId: "CISS/TCS/2026-27/910",
+      fullName: "Lat Lng Guard",
+      phoneNumber: "7777777010",
+      clientName: "TCS",
+      district: "Ernakulam",
+      status: "Active",
+    });
+    db.seed("sites", "site-latlng", {
+      siteName: "Lat Lng Site",
+      clientName: "TCS",
+      district: "Ernakulam",
+      latitude: 9.981,
+      longitude: 76.281,
+      geofenceRadiusMeters: 250,
+      strictGeofence: true,
+      shiftMode: "fixed",
+      shiftPattern: "2x12",
+      shiftTemplates: buildShiftTemplates("2x12"),
+      dutyPoints: [],
+    });
+    vi.doMock("@/lib/firebaseAdmin", () => ({ db }));
+    vi.doMock("@/lib/server/audit", () => ({
+      buildServerAuditEvent: vi.fn(() => ({ event: "attendance_submitted" })),
+    }));
+    vi.doMock("@/lib/server/monitoring", () => ({
+      SYSTEM_METRIC_NAMES: {
+        attendanceSubmitSuccess: "attendance_submit_success",
+        attendanceSubmitFailure: "attendance_submit_failure",
+      },
+      incrementSystemMetric: vi.fn(async () => undefined),
+    }));
+    vi.doMock("@/lib/work-orders/assignment-match", () => ({
+      isAssignedGuardMatch: vi.fn(() => true),
+    }));
+    vi.doMock("firebase-admin/firestore", () => ({
+      FieldValue: { delete: () => deleteSentinel },
+      Timestamp: {
+        now: () => new FakeTimestamp(new Date(Date.now())),
+        fromDate: (date: Date) => new FakeTimestamp(date),
+      },
+    }));
+
+    const { POST } = (await import("./submit/route")) as any;
+    const payload = buildAttendancePayload({
+      employeeDocId: "emp-latlng",
+      employeeId: "CISS/TCS/2026-27/910",
+      employeeName: "Lat Lng Guard",
+      employeePhoneNumber: "7777777010",
+      clientName: "TCS",
+      district: "Ernakulam",
+      siteId: "site-latlng",
+      siteName: "Lat Lng Site",
+      siteCoords: { lat: 9.981, lng: 76.281 },
+      locationCoords: { lat: 9.9811, lon: 76.2811, accuracyMeters: 8 },
+      locationText: "Lat Lng Site",
+      status: "In",
+      reportedAtClient: "2026-05-23T13:24:00.000Z",
+      shiftCode: "day",
+      shiftLabel: "Day Shift",
+      shiftStartTime: "08:00",
+      shiftEndTime: "20:00",
+    });
+
+    const response = await POST(
+      new Request("https://example.com/api/attendance/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(db.listDocs("attendanceLogs")[0].data).toMatchObject({
+      employeeDocId: "emp-latlng",
+      siteId: "site-latlng",
+      status: "In",
     });
   });
 });

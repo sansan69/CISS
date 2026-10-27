@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
-import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
+import { requireSuperAdmin, unauthorizedResponse } from "@/lib/server/auth";
 export const runtime = "nodejs";
 
+// Bulk-verifying email addresses is an identity step (the Aadhaar administrator
+// requires a verified email), so it is restricted to super-admin — not every
+// admin. See the 2026-10-06 assessment H-9.
 export async function POST(request: Request) {
   try {
-    await requireAdmin(request);
+    await requireSuperAdmin(request);
     const { auth: adminAuth } = await import("@/lib/firebaseAdmin");
 
     const listedUsers = await adminAuth.listUsers(1000);
@@ -27,7 +30,12 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ fixed, fixedCount: fixed.length, skippedCount: skipped.length });
   } catch (error: any) {
-    const status = error?.message === "Admin access required." ? 403 : 401;
-    return unauthorizedResponse(error?.message || "Unauthorized", status);
+    const message = error?.message || "Unauthorized";
+    const status =
+      message === "Super admin access required." ||
+      message === "Admin access required."
+        ? 403
+        : 401;
+    return unauthorizedResponse(message, status);
   }
 }

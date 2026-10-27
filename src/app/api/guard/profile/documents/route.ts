@@ -27,6 +27,44 @@ const ALLOWED_TYPES = new Map([
   ["application/pdf", "pdf"],
 ]);
 
+/**
+ * Types this route is willing to replay to a browser. The stored object may
+ * have been uploaded by another path (server routes, legacy imports, admin
+ * uploads), so the bucket metadata is never trusted as a response header:
+ * anything outside this allow-list is streamed as a download attachment with
+ * an opaque octet-stream type. SVG and other script-capable image types are
+ * deliberately absent — `nosniff` alone does not stop an inline SVG from
+ * executing script on the API origin.
+ */
+const SAFE_INLINE_TYPES = new Map([
+  ["image/jpeg", "jpg"],
+  ["image/png", "png"],
+  ["image/webp", "webp"],
+  ["application/pdf", "pdf"],
+]);
+
+function safeDownloadHeaders(storedContentType: unknown): Record<string, string> {
+  const declared = typeof storedContentType === "string"
+    ? storedContentType.split(";")[0]!.trim().toLowerCase()
+    : "";
+  const extension = SAFE_INLINE_TYPES.get(declared);
+  if (!extension) {
+    return {
+      "Content-Type": "application/octet-stream",
+      "Content-Disposition": "attachment",
+    };
+  }
+  // Raster images and PDFs are safe to render in the browser; every other
+  // stored type is forced to download. PDFs keep the attachment disposition so
+  // they cannot be rendered as active content from this API origin.
+  return {
+    "Content-Type": declared,
+    "Content-Disposition": declared === "application/pdf"
+      ? `attachment; filename="document.${extension}"`
+      : `inline; filename="document.${extension}"`,
+  };
+}
+
 async function validatedFile(value: FormDataEntryValue | null, required = true) {
   if (!(value instanceof File)) {
     if (!required) return null;
@@ -105,10 +143,12 @@ export async function GET(request: Request) {
     });
     return new NextResponse(buffer, {
       headers: {
-        "Content-Type": metadata.contentType || "application/octet-stream",
-        "Content-Disposition": "inline",
+        ...safeDownloadHeaders(metadata.contentType),
         "Cache-Control": "no-store, private, max-age=0",
         "X-Content-Type-Options": "nosniff",
+        // API routes are outside the middleware CSP matcher, so this response
+        // carries its own: it must never be a script-capable document.
+        "Content-Security-Policy": "default-src 'none'; sandbox",
       },
     });
   } catch (error) {

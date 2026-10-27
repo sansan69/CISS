@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { mirrorGuardPin } from "@/lib/server/guard-credentials";
 import {
   hashPin,
   validatePinFormat,
@@ -93,6 +94,9 @@ export async function POST(request: Request) {
       guardPin: newHash,
       guardPinSetAt: FieldValue.serverTimestamp(),
     });
+
+    // Mirror into the server-only credential store (migration phase 1).
+    await mirrorGuardPin(adminDb, employeeDocId, newHash);
 
     await rateLimitRef.delete().catch(() => undefined);
 

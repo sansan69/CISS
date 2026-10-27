@@ -16,6 +16,7 @@ import {
   buildRateLimitKey,
 } from "@/lib/server/rate-limit";
 import crypto from "node:crypto";
+import { mirrorGuardPin } from "@/lib/server/guard-credentials";
 export const runtime = "nodejs";
 
 const AUTH_FAILURE_MESSAGE = "Invalid sign-in details. Please try again.";
@@ -82,12 +83,22 @@ async function isCustomTokenAccepted(token: string): Promise<boolean> {
 }
 
 async function fallbackToProductionLogin(
+  request: Request,
   body: Record<string, unknown>,
-): Promise<Response> {
+): Promise<Response | null> {
   const baseUrl =
     process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://cisskerala.site";
+  const target = new URL(`${baseUrl.replace(/\/$/, "")}/api/guard/auth/login`);
 
-  return fetch(`${baseUrl.replace(/\/$/, "")}/api/guard/auth/login`, {
+  // Never re-enter this same server: in local development NEXT_PUBLIC_APP_URL
+  // often points at the dev host, which turned one login into a request storm.
+  try {
+    if (new URL(request.url).origin === target.origin) return null;
+  } catch {
+    return null;
+  }
+
+  return fetch(target.toString(), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -265,7 +276,7 @@ export async function POST(request: Request) {
         guardLockoutUntil: FieldValue.delete(),
         ...(migratedPin ? { guardPin: migratedPin } : {}),
       });
-      return { authenticated: true, data: currentData };
+      return { authenticated: true, data: currentData, migratedPin };
     });
 
     if (!loginResult.authenticated || !loginResult.data) {
@@ -273,6 +284,12 @@ export async function POST(request: Request) {
         await verifyDummyPin(normalizedPin);
       }
       return authenticationFailure();
+    }
+
+    // Keep the server-only credential store in step while `employees.guardPin`
+    // is still the authoritative copy (migration phase 1).
+    if (loginResult.migratedPin) {
+      await mirrorGuardPin(adminDb, empDoc.id, loginResult.migratedPin);
     }
 
     // Create custom token
@@ -291,15 +308,17 @@ export async function POST(request: Request) {
     if (isLocalHost(request.headers.get("host"))) {
       const tokenAccepted = await isCustomTokenAccepted(customToken);
       if (!tokenAccepted) {
-        const fallbackResponse = await fallbackToProductionLogin({
+        const fallbackResponse = await fallbackToProductionLogin(request, {
           phoneNumber: normalizedPhone || undefined,
           employeeId: normalizedEmployeeId || undefined,
           pin: normalizedPin,
         });
-        const fallbackData = await fallbackResponse.json();
-        return NextResponse.json(fallbackData, {
-          status: fallbackResponse.status,
-        });
+        if (fallbackResponse) {
+          const fallbackData = await fallbackResponse.json();
+          return NextResponse.json(fallbackData, {
+            status: fallbackResponse.status,
+          });
+        }
       }
     }
 

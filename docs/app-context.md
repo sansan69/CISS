@@ -1,6 +1,6 @@
 # CISS Workforce App Context
 
-Last updated: 2026-04-11
+Last updated: 2026-10-26
 
 This file is the current architecture and product-memory snapshot for the repo. Use it as the first reference before older planning docs such as `README.md`, `docs/blueprint.md`, or `docs/hrm-upgrade-todo.md`.
 
@@ -22,6 +22,12 @@ This file is the current architecture and product-memory snapshot for the repo. 
   - `REGION_NAME`
   - `GUARD_AUTH_EMAIL_DOMAIN`
 - The repo now supports both a normal regional deployment and a super-admin control-plane flow for multi-region onboarding and overview reporting.
+- Regional records with missing state metadata fall back to the deployment's `REGION_CODE`. State-code rules remain legacy-compatible. The architecture assumes a separate Firebase project per region; shared-database tenancy and cross-region isolation in a single project are unverified.
+- **Selected multi-state model (2026-10-26):** every Indian state gets its own Firebase project under its own Google account, with its own regional deployment. Isolation is the project/account boundary; `stateCode` checks in rules and queries are defence-in-depth, not the tenant boundary. Consequences:
+  - Each regional deployment is authoritative for its own region. `public/regions` advertises the deployment's own region (it no longer injects Kerala), and `public/region-config/[code]` serves the own region from env and only foreign regions from this project's registry.
+  - Each region's Admin SDK credentials are a service account from that project's Google account. The control plane stores it AES-GCM-encrypted in `regionConnections` (requires `REGION_CONNECTIONS_SECRET` in production) and deploys it as `FIREBASE_ADMIN_SDK_CONFIG_BASE64`; use least-privilege roles, not Owner.
+  - The mobile app picks a region at first launch, initialises Firebase from that region's config and keeps caches region-keyed. It must never mix two projects in one session.
+  - Cross-state reporting is an explicit aggregation/export path, not an implicit shared database. Do not consolidate regions into one project without a separate rules and data-isolation design.
 
 ## Roles and auth model
 
@@ -70,10 +76,6 @@ Core modules now extend well beyond the original employee-directory MVP:
 - `/training/assignments`
 - `/evaluations`
 - `/leaderboard`
-- `/payroll`
-- `/payroll/run`
-- `/payroll/cycles/[id]`
-- `/leave`
 - `/visit-reports`
 - `/training-reports`
 - `/settings`
@@ -84,7 +86,6 @@ Core modules now extend well beyond the original employee-directory MVP:
 - `/settings/data-export`
 - `/settings/qr-management`
 - `/settings/reports`
-- `/settings/wage-config`
 - `/settings/admin-tools`
 - `/settings/state-management`
 
@@ -93,10 +94,16 @@ Core modules now extend well beyond the original employee-directory MVP:
 - `/guard/dashboard`
 - `/guard/profile`
 - `/guard/attendance`
-- `/guard/payslips`
 - `/guard/training`
 - `/guard/evaluations`
-- `/guard/leave`
+
+### Retired payroll, leave, and compliance workflows
+
+- Admin and guard operational leave pages, payroll runs/cycles, payslip pages, wage-configuration pages, and compliance-workflow surfaces are retired and removed from active navigation.
+- Legacy API endpoints for payroll, leave, payslips, wage configuration, and compliance settings remain as stateless tombstones that return HTTP 410.
+- Firestore client rules deny reads and writes for the retired collections, including `payrollEntries`, `payrollCycles`, `clientWageConfig`, `salaryStructures`, `employeeSalaries`, `complianceSettings`, `leaveRequests`, and `leaveBalances`.
+- Historical payroll, leave, wage, and compliance records are retained; retirement does not delete historical data.
+- Employee `OnLeave` status, EPF/UAN and ESIC identifiers, bank fields, and statutory-rights language remain in employment records and terms. Retiring an operational leave workflow does not remove legal leave entitlements or other statutory labor rights.
 
 ## Important route migrations
 
@@ -114,6 +121,10 @@ The active source of truth for client, office, site, and client-user management 
 
 - Employee enrollment, directory, and detailed profile pages are live.
 - Attendance capture exists for both public capture and guard/mobile flows.
+- Attendance identity model (2026-10-26):
+  - **Self** — a signed-in guard submits their own attendance; no external proof.
+  - **Assisted** — a signed-in guard marks a colleague who has no phone, using the colleague's signed QR badge, employee ID + phone, phone, or (TCS employees only) resource ID. The server binds a single-use proof to the actor and subject, records `assistedSubmission`, `markedByUid`, `markedByEmployeeDocId` and `attendanceMethod` on the attendance log, and keeps the normal photo/geofence checks.
+  - **Kiosk** — a signed-out shared device may only use a signed QR badge; employee ID, phone and resource ID require a signed-in guard. Proofs are single-use (`attendanceVerificationProofs`, server-only, `expireAt` for a Firestore TTL policy).
 - Admin attendance logs now expose richer detail:
   - employee phone number
   - shift metadata
@@ -143,16 +154,6 @@ The active source of truth for client, office, site, and client-user management 
 
 - Training, assignments, evaluations, and leaderboard routes are present.
 - Training/evaluation is no longer a purely planned feature; it is part of the active app surface.
-
-### Payroll and leave
-
-- Payroll is a live subsystem, not a roadmap-only item.
-- Typed models exist for:
-  - compliance settings
-  - client wage config
-  - payroll cycles
-  - payroll entries
-- Guard payslips and leave routes are also present.
 
 ### Field operations
 
@@ -220,12 +221,11 @@ The app now works across a broader set of Firestore entities than the original d
 - `evaluations`
 - `trainingReports`
 - `visitReports`
-- `payrollCycles`
-- `payrollEntries`
-- `leaveRequests`
 - `regions`
 - `regionConnections`
 - `fcmTokens`
+
+Retired workflow collections remain in Firestore as historical records and are server-only under client rules: `payrollEntries`, `payrollCycles`, `clientWageConfig`, `salaryStructures`, `employeeSalaries`, `complianceSettings`, `leaveRequests`, and `leaveBalances`. Their presence does not indicate an active product workflow.
 
 ## Practical guidance for future work
 

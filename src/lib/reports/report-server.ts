@@ -1,6 +1,7 @@
 import type FirebaseFirestore from "@google-cloud/firestore";
 
 import { districtMatches } from "@/lib/districts";
+import { getRegionStateCode } from "@/lib/runtime-config";
 import type { AppDecodedToken } from "@/lib/server/auth";
 import { requireActiveFieldOfficerProfile } from "@/lib/server/linked-profiles";
 
@@ -89,7 +90,7 @@ export async function resolveReportSite(
     clientName: typeof data.clientName === "string" ? data.clientName : "",
     siteName: typeof data.siteName === "string" ? data.siteName : "",
     district: typeof data.district === "string" ? data.district : "",
-    stateCode: typeof data.stateCode === "string" ? data.stateCode : "KL",
+    stateCode: getRegionStateCode(data.stateCode),
     address:
       typeof data.address === "string"
         ? data.address
@@ -114,8 +115,8 @@ export function reportMatchesAdminScope(
   decoded: AppDecodedToken,
 ) {
   if (decoded.role === "superAdmin") return true;
-  const stateCode = decoded.stateCode || "KL";
-  if (String(report.stateCode || "KL") !== stateCode) return false;
+  const stateCode = getRegionStateCode(decoded.stateCode);
+  if (getRegionStateCode(report.stateCode) !== stateCode) return false;
   const assignedDistricts = Array.isArray(decoded.assignedDistricts)
     ? decoded.assignedDistricts
     : [];

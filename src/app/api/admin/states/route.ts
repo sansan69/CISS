@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { verifyRequestAuth, unauthorizedResponse } from "@/lib/server/auth";
+import { REGION_CODE } from "@/lib/runtime-config";
 export const runtime = "nodejs";
 
 function isAdmin(decoded: Record<string, unknown>) {
@@ -37,7 +38,7 @@ export async function GET(request: Request) {
       const code = d.data().stateCode;
       if (code) codes.add(code as string);
     });
-    if (codes.size === 0) codes.add("KL"); // default
+    if (codes.size === 0) codes.add(REGION_CODE);
 
     const states = Array.from(codes).map((code) => ({ stateCode: code }));
     return NextResponse.json({ states });

@@ -1,4 +1,5 @@
 import { canonicalizeDistrictList } from "@/lib/districts";
+import { getRegionStateCode } from "@/lib/runtime-config";
 import type { AppDecodedToken } from "@/lib/server/auth";
 
 export type ActiveGuardProfile = {
@@ -96,7 +97,7 @@ export async function resolveActiveFieldOfficerProfile(
     uid: decoded.uid,
     profileDocId: doc.id,
     name: normalizeText(data.name) || "Field Officer",
-    stateCode: normalizeText(data.stateCode) || "KL",
+    stateCode: getRegionStateCode(data.stateCode),
     assignedDistricts: Array.isArray(data.assignedDistricts)
       ? canonicalizeDistrictList(
           data.assignedDistricts.filter(

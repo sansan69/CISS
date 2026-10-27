@@ -42,6 +42,29 @@ service firebase.storage {
       );
     }
 
+    function isFieldOfficer() {
+      return isSignedIn() && request.auth.token.role == 'fieldOfficer';
+    }
+
+    function isHR() {
+      return isSignedIn() && request.auth.token.role == 'hr';
+    }
+
+    function isAccounts() {
+      return isSignedIn() && request.auth.token.role == 'accounts';
+    }
+
+    function isCompliance() {
+      return isSignedIn() && request.auth.token.role == 'compliance';
+    }
+
+    // Mirrors isStaff() in firestore.rules: every staff role, but never a guard
+    // and never a client user. Document and selfie reads are staff-only; those
+    // two roles fetch their own files through Admin-SDK server routes.
+    function isStaff() {
+      return isAdmin() || isHR() || isAccounts() || isCompliance() || isFieldOfficer();
+    }
+
     // Restricted Aadhaar files are uploaded and streamed only by server routes.
     match /restrictedEmployeeAadhaar/{employeeId}/{fileName} {
       allow read, write: if false;
@@ -53,10 +76,6 @@ service firebase.storage {
 
     match /restrictedEmployeeConsent/{employeeId}/{fileName} {
       allow read, write: if false;
-    }
-
-    function isFieldOfficer() {
-      return isSignedIn() && request.auth.token.role == 'fieldOfficer';
     }
 
     function reportIsDraftOrNotCreated(reportType, reportId) {
@@ -92,9 +111,10 @@ service firebase.storage {
       allow update: if false;
     }
 
-    // F-01: Field officer report photo uploads — only admin or field officer can read
+    // F-01: Field officer report photo uploads — admins read every officer's
+    // evidence; a field officer reads only the files they uploaded themselves.
     match /foReports/{folder}/{uid}/{fileName} {
-      allow read: if isAdmin() || isFieldOfficer();
+      allow read: if isAdmin() || (isFieldOfficer() && request.auth.uid == uid);
       allow create: if isFieldOfficer() && request.auth.uid == uid && (
         (folder == 'trainingReportFiles' && isAllowedTrainingSize() && isTrainingContent()) ||
         (folder != 'trainingReportFiles' && isAllowedSize() && isDocument())
@@ -117,16 +137,24 @@ service firebase.storage {
       allow delete: if isAdmin();
     }
 
+    // Signature images are PII used on ID cards and official documents. Reads
+    // are staff-only. Guards and client users never hold signature paths in the
+    // browser: /api/employees/profile/[id]/document streams the file with the
+    // Admin SDK after its own role check (client accounts are refused the
+    // signature category), and the guard profile route only serves proof pages.
     match /employees/{employeeKey}/signatures/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if isStaff();
       allow create: if isAdmin() && isAllowedSize() && isImage();
       allow update: if isAdmin() && isAllowedSize() && isImage();
       allow delete: if isAdmin();
     }
 
 
+    // Attendance selfies are PII. Reads are staff-only: a guard views their own
+    // selfie through the tokenized URL returned by the attendance APIs, and
+    // client users through the attendance report server route.
     match /employees/{employeeKey}/attendance/{attemptId}/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if isStaff();
       // Attendance photos are written only by the validated server upload route.
       allow create: if false;
       allow update: if isAdmin() && isAllowedEnrollmentImageSize() && isImage();
@@ -289,6 +317,16 @@ service firebase.storage {
       allow create: if false;
       allow update: if false;
       allow delete: if isAdmin();
+    }
+
+    // Payslip PDFs — server-only. Guards download through
+    // /api/guard/payslips/{id}/payslip, which checks employeeDocId ownership
+    // before streaming; clients must never be able to read or enumerate each
+    // other's payslips. (The catch-all below already denies these paths; this
+    // block states the intent so a future broad employees/** rule cannot
+    // silently re-open payslips.)
+    match /employees/{employeeKey}/payslips/{period}/{fileName} {
+      allow read, write: if false;
     }
 
     match /{allPaths=**} {

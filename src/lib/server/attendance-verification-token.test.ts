@@ -37,6 +37,17 @@ describe("attendance verification tokens", () => {
     expect(verifyAttendanceVerificationToken(`${token}tampered`)).toBeNull();
   });
 
+  it("rejects a token at its exact expiry second", () => {
+    const token = generateAttendanceVerificationToken({
+      employeeDocId: "employee-doc-1",
+      method: "qr",
+      ttlSeconds: 0,
+    });
+
+    // exp === now must already be invalid.
+    expect(verifyAttendanceVerificationToken(token)).toBeNull();
+  });
+
   it("rejects expired tokens", () => {
     const token = generateAttendanceVerificationToken({
       employeeDocId: "employee-doc-1",

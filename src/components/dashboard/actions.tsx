@@ -4,7 +4,6 @@ import Link from "next/link";
 import {
   ArrowUpRight,
   CalendarCheck,
-  CurrencyInr,
   FileText,
   Footprints,
   GraduationCap,
@@ -46,9 +45,7 @@ const roleActions: Record<UserRole, QuickAction[]> = {
     { label: "Site reports", description: "Review field visits", href: "/visit-reports", icon: FileText },
     { label: "Patrol activity", description: "Review patrols", href: "/patrol-activity", icon: Footprints },
   ],
-  accounts: [
-    { label: "Run payroll", description: "Process monthly payroll", href: "/payroll/run", icon: CurrencyInr },
-  ],
+  accounts: [],
   hr: [
     { label: "Training", description: "Manage training", href: "/training", icon: FileText },
   ],

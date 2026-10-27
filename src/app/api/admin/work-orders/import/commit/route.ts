@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+
+import { normalizeDutyDate } from "@/lib/work-orders/duty-date";
 import { OPERATIONAL_CLIENT_NAME } from "../../../../../../lib/constants";
 import { buildLocationIdentity } from "@/lib/location-utils";
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
@@ -874,9 +876,28 @@ export async function POST(request: Request) {
       examName: payload.examName,
       examCode: payload.examCode,
     }));
+    let invalidDutyDate: string | null = null;
+    let hasInvalidDutyDate = false;
+    const datedRows = canonicalRows.map((row) => {
+      const date = normalizeDutyDate(row.date);
+      if (!date) {
+        if (!hasInvalidDutyDate) invalidDutyDate = String(row.date ?? "");
+        hasInvalidDutyDate = true;
+      }
+      return { ...row, date: date ?? row.date };
+    });
+    if (hasInvalidDutyDate) {
+      return NextResponse.json(
+        {
+          error:
+            "Every imported row needs a valid duty date (YYYY-MM-DD). Re-upload the sheet with the exam date in the title or the date column.",
+        },
+        { status: 400 },
+      );
+    }
     const computedContentHash = buildTcsExamContentHash(
       payload.examCode,
-      canonicalRows.map((row) => ({
+      datedRows.map((row) => ({
         siteId: row.siteId,
         siteName: row.siteName,
         district: row.district,
@@ -897,19 +918,19 @@ export async function POST(request: Request) {
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
 
     const siteLookupMaps = await buildSiteLookupMaps(adminDb);
-    const resolvedCanonicalRows = resolveParsedRowSiteIds(canonicalRows, siteLookupMaps);
+    const resolvedCanonicalRows = resolveParsedRowSiteIds(datedRows, siteLookupMaps);
 
     const parsedByKey = new Map(
-      canonicalRows.map((row) => [getIdentityKey(row), row]),
+      datedRows.map((row) => [getIdentityKey(row), row]),
     );
     const parsedByResolvedKey = new Map(
       resolvedCanonicalRows.map((row) => [getIdentityKey(row), row]),
     );
     const originalKeyByResolvedKey = new Map<string, string>();
-    for (let i = 0; i < canonicalRows.length; i += 1) {
+    for (let i = 0; i < datedRows.length; i += 1) {
       originalKeyByResolvedKey.set(
         getIdentityKey(resolvedCanonicalRows[i]),
-        getIdentityKey(canonicalRows[i]),
+        getIdentityKey(datedRows[i]),
       );
     }
 

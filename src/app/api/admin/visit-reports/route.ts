@@ -26,6 +26,7 @@ import {
   serializeReportDate,
 } from "@/lib/reports/report-server";
 import { validateReportAttachments } from "@/lib/reports/report-attachments.server";
+import { getRegionStateCode } from "@/lib/runtime-config";
 
 export const runtime = "nodejs";
 
@@ -98,7 +99,7 @@ export async function GET(request: Request) {
     } else if (isFieldOfficer) {
       query = query.where("fieldOfficerId", "==", decoded.uid).orderBy("createdAt", "desc");
     } else if (decoded.role !== "superAdmin") {
-      query = query.where("stateCode", "==", decoded.stateCode || "KL").orderBy("createdAt", "desc");
+      query = query.where("stateCode", "==", getRegionStateCode(decoded.stateCode)).orderBy("createdAt", "desc");
     } else if (fieldOfficerId) {
       query = query.where("fieldOfficerId", "==", fieldOfficerId).orderBy("createdAt", "desc");
     } else {

@@ -257,7 +257,7 @@ export default function AdminLoginPage() {
           <p className="mt-4 text-base text-white/70 leading-relaxed">
             {portalContext?.isClientPortal && portalContext.client
               ? "Attendance, deployments, site visits, and training visibility for your client account."
-              : "Attendance, payroll, work orders, and field operations — all in one portal."}
+              : "Attendance, work orders, and field operations — all in one portal."}
           </p>
 
           <div className="mt-8 space-y-3">
@@ -271,7 +271,7 @@ export default function AdminLoginPage() {
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/8 ring-1 ring-white/15">
                 <ChartBar className="h-4 w-4 text-accent" weight="duotone" />
               </div>
-              <span>Automated payroll with Kerala slab compliance</span>
+              <span>Connected attendance and deployment operations</span>
             </div>
             <div className="flex items-center gap-3 text-sm text-white/80">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/8 ring-1 ring-white/15">

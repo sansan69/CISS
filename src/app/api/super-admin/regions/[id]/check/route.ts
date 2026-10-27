@@ -9,12 +9,76 @@ import { buildRegionVercelProjectName } from "@/lib/vercel-region";
 import type { ReadinessCheckResult, ReadinessSummary } from "@/types/region";
 export const runtime = "nodejs";
 
-async function probeUrl(url: string): Promise<boolean> {
+const PROBE_TIMEOUT_MS = 5_000;
+
+/** Hostname suffixes that resolve to internal/infrastructure addresses. */
+const BLOCKED_HOST_SUFFIXES = [
+  ".localhost",
+  ".local",
+  ".localdomain",
+  ".internal",
+  ".home.arpa",
+  ".in-addr.arpa",
+  ".ip6.arpa",
+];
+
+/**
+ * Reject hosts that cannot be a public deployment URL. A region's
+ * `vercelProductionUrl` comes from a stored document, so it is attacker-
+ * influenceable state rather than trusted configuration: probing it with no
+ * validation turns this readiness check into an SSRF-style reachability oracle
+ * against metadata endpoints, loopback, and private networks.
+ *
+ * IP literals are rejected outright (Vercel/custom domains are hostnames), as
+ * are internal suffixes and non-default ports. DNS rebinding is out of scope
+ * for a fetch-only probe; blocking literals and internal names covers the
+ * predictable cases.
+ */
+function isPrivateOrReservedHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[/, "").replace(/\]$/, "");
+  if (!host) return true;
+  if (host === "localhost" || host === "metadata.google.internal") return true;
+  if (BLOCKED_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix))) return true;
+  // IPv6 literals arrive bracketed and contain colons after normalisation.
+  if (host.includes(":")) return true;
+  // IPv4 literal — reject every literal rather than enumerate private ranges.
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) return true;
+  return false;
+}
+
+/**
+ * Validate a stored deployment URL before it is fetched.
+ *
+ * @returns the parsed URL, or `null` when the value is not a public https URL.
+ */
+function validatedPublicHttpsUrl(raw: string): URL | null {
   try {
-    const res = await fetch(url, { method: "HEAD", redirect: "manual" });
-    return res.status >= 200 && res.status < 400;
+    const url = new URL(raw.trim());
+    if (url.protocol !== "https:") return null;
+    if (url.username || url.password) return null;
+    if (url.port && url.port !== "443") return null;
+    if (!url.hostname.includes(".")) return null;
+    if (isPrivateOrReservedHost(url.hostname)) return null;
+    return url;
   } catch {
-    return false;
+    return null;
+  }
+}
+
+type ProbeResult = { reachable: boolean; invalidUrl?: boolean };
+
+async function probeUrl(rawUrl: string): Promise<ProbeResult> {
+  const url = validatedPublicHttpsUrl(rawUrl);
+  if (!url) return { reachable: false, invalidUrl: true };
+  try {
+    const res = await fetch(url.toString(), {
+      method: "HEAD",
+      redirect: "manual",
+      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+    });
+    return { reachable: res.status >= 200 && res.status < 400 };
+  } catch {
+    return { reachable: false };
   }
 }
 
@@ -153,17 +217,20 @@ export async function GET(
       });
     }
 
-    // 3. Vercel URL check
+    // 3. Vercel URL check. The stored URL is validated (public https only,
+    // timeout + manual redirect) before any outbound request is made.
     const vercelProductionUrl = region.vercelProductionUrl as string | undefined;
     if (vercelProductionUrl) {
-      const urlReachable = await probeUrl(vercelProductionUrl);
+      const probe = await probeUrl(vercelProductionUrl);
       checks.push({
         checkId: "vercel_url",
         label: "Vercel deployment URL",
-        passed: urlReachable,
-        message: urlReachable
+        passed: probe.reachable,
+        message: probe.reachable
           ? `Deployment responds at ${vercelProductionUrl}`
-          : `Deployment at ${vercelProductionUrl} is not responding. Check Vercel dashboard.`,
+          : probe.invalidUrl
+            ? "Configured deployment URL is not a public https URL. Probe skipped — set a valid production URL."
+            : `Deployment at ${vercelProductionUrl} is not responding. Check Vercel dashboard.`,
       });
     } else {
       checks.push({

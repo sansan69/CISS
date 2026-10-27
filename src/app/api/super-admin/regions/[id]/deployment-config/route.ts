@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 
 import { requireSuperAdmin, unauthorizedResponse } from "@/lib/server/auth";
 import { getRegionConnection } from "@/lib/server/region-connections";
-import { REGION_CODE, REGION_NAME } from "@/lib/runtime-config";
+import { stripRegionSecrets } from "@/lib/server/region-onboarding";
+import { REGION_ALLOWED_DOMAINS, REGION_CODE, REGION_NAME } from "@/lib/runtime-config";
 import type { RegionRecord } from "@/types/region";
 export const runtime = "nodejs";
 
@@ -33,6 +34,8 @@ export async function GET(
         measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || null,
         regionAdminEmail:
           process.env.SUPER_ADMIN_EMAIL || process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || null,
+        // The deployment's own region reads its host lock from its own environment.
+        allowedDomains: REGION_ALLOWED_DOMAINS,
         onboardingChecklist: {
           metadataSaved: true,
           firebaseValidated: true,
@@ -59,8 +62,18 @@ export async function GET(
           )
         : Boolean((await getRegionConnection(adminDb, regionCode))?.serviceAccountJson);
 
+    // `region` is built from the (attacker-uninfluenceable) server env for the
+    // current region, but for enrolled regions it is a stored document. Strip any
+    // credential-shaped field so a document that was written by hand can never
+    // leak a service account through this response.
+    const safeRegion = stripRegionSecrets(region);
+
+    const allowedDomains = Array.isArray(safeRegion.allowedDomains)
+      ? safeRegion.allowedDomains
+      : [];
+
     return NextResponse.json({
-      region,
+      region: safeRegion,
       deploymentConfig: {
         APP_MODE: "regional",
         NEXT_PUBLIC_APP_MODE: "regional",
@@ -75,6 +88,13 @@ export async function GET(
         NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: region.messagingSenderId || "",
         NEXT_PUBLIC_FIREBASE_APP_ID: region.firebaseWebAppId || "",
         NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: region.measurementId || "",
+        // BYO-Firebase Android client. These are public client identifiers (they
+        // ship inside the APK), not service-account material.
+        NEXT_PUBLIC_FIREBASE_ANDROID_APP_ID: region.androidAppId || "",
+        NEXT_PUBLIC_FIREBASE_ANDROID_API_KEY: region.androidApiKey || "",
+        NEXT_PUBLIC_FIREBASE_ANDROID_PACKAGE_NAME: region.androidPackageName || "",
+        REGION_ALLOWED_DOMAINS: allowedDomains.join(","),
+        ONBOARDING_MODE: region.onboardingMode || "automated",
       },
       hasPersistentConnection,
     });

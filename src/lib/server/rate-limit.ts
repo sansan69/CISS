@@ -28,16 +28,32 @@ export async function checkRateLimit(
   const windowStart = new Date(Date.now() - config.windowMs);
 
   try {
+    // Retain limiter documents for one extra window after they stop mattering so
+    // a Firestore TTL policy on `expireAt` can delete them. Without this the
+    // collection grows forever (12,338 docs, 11,488 older than a week at the
+    // 2026-10-26 audit).
+    const expireAt = new Date(
+      Date.now() + Math.max(config.windowMs * 2, 60 * 60 * 1000),
+    );
+
     const result = await db.runTransaction(async (transaction) => {
       const snap = await transaction.get(ref);
       const data = snap.exists ? (snap.data() as Record<string, any>) : null;
 
-      if (!data || data.windowStart.toDate() < windowStart) {
+      // Malformed documents (missing windowStart) previously threw and made the
+      // endpoint fail open or closed. Treat them as expired instead.
+      const windowStartedAt =
+        data?.windowStart && typeof data.windowStart.toDate === "function"
+          ? data.windowStart.toDate()
+          : null;
+
+      if (!data || !windowStartedAt || windowStartedAt < windowStart) {
         // Window expired or first request — reset
         const newData = {
           count: 1,
           windowStart: now,
           updatedAt: now,
+          expireAt,
         };
         transaction.set(ref, newData);
         return {
@@ -54,10 +70,11 @@ export async function checkRateLimit(
       transaction.update(ref, {
         count,
         updatedAt: now,
+        expireAt,
       });
 
       const resetAt = new Date(
-        data.windowStart.toDate().getTime() + config.windowMs,
+        windowStartedAt.getTime() + config.windowMs,
       );
 
       return {

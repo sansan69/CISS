@@ -1,11 +1,11 @@
 # CISS Workforce - AI-Powered Employee Management System
 
-> Current status note (2026-04-11): the app has grown far beyond the original MVP described below. Start with [docs/app-context.md](/Users/mymac/Documents/CISS/docs/app-context.md) for the current architecture, route map, role model, and repo-memory snapshot. This `README.md` now serves mainly as the historical product brief and setup reference.
+> Current status note (2026-10-26): the app has grown far beyond the original MVP described below. Start with [docs/app-context.md](/Users/mymac/Documents/CISS/docs/app-context.md) for the current architecture, route map, role model, and repo-memory snapshot. This `README.md` now serves mainly as the historical product brief and setup reference.
 
 ## Current Snapshot
 
 - Main app: Next.js 15 workforce operations platform with Firebase-backed admin, guard, client, field-officer, and super-admin flows.
-- Active modules now include work orders, attendance review, training, evaluations, payroll, leave, branch ops, client/site management, and multi-region onboarding.
+- Active modules include work orders, attendance review, training, evaluations, client/site management, and multi-region onboarding. Payroll, payslip, wage-configuration, compliance-workflow, and operational leave surfaces are retired: their legacy APIs return HTTP 410 and Firestore client rules deny access to their collections. Historical records remain retained. Employee `OnLeave` status, statutory and bank fields, and statutory-rights language remain part of employment records and terms.
 - Current source of truth for repo context: [docs/app-context.md](/Users/mymac/Documents/CISS/docs/app-context.md)
 
 ## 1. Project Overview

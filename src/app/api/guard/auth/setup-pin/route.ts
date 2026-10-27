@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { mirrorGuardPin } from "@/lib/server/guard-credentials";
 import {
   guardDobMatches,
   parseGuardEmployeeIdInput,
@@ -254,6 +255,8 @@ export async function POST(request: Request) {
         return true;
       });
       if (!finalized) return identityVerificationFailed();
+      // Mirror into the server-only credential store (migration phase 1).
+      await mirrorGuardPin(adminDb, empDoc.id, pinHash);
       await adminAuth.setCustomUserClaims(guardUid, {
         role: "guard",
         employeeId: empData.employeeId,

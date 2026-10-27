@@ -102,6 +102,7 @@ export const settingsSubItems: NavItem[] = [
   { href: "/settings/admin-tools", label: "Admin Tools", icon: Wrench },
   { href: "/settings/reports", label: "Reports", icon: ChartBar },
   { href: "/settings/wage-config", label: "Wage Config", icon: Wallet },
+  { href: "/settings/payslips", label: "Payslips", icon: FileText, adminOnly: true },
 ];
 
 export const bottomNavItems: NavItem[] = [

@@ -3,7 +3,6 @@
 import { db } from '@/lib/firebaseAdmin';
 
 export type NotificationType = 
-  | 'payslip_ready'
   | 'training_assigned'
   | 'evaluation_complete'
   | 'shift_reminder';

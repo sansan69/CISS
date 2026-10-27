@@ -14,14 +14,6 @@ const dashboardActionsSource = readFileSync(
   resolve(process.cwd(), "src/components/dashboard/actions.tsx"),
   "utf8",
 );
-const payrollPageSource = readFileSync(
-  resolve(process.cwd(), "src/app/(app)/payroll/page.tsx"),
-  "utf8",
-);
-const payrollRunRouteSource = readFileSync(
-  resolve(process.cwd(), "src/app/api/admin/payroll/run/route.ts"),
-  "utf8",
-);
 const complianceSettingsPagePath = resolve(
   process.cwd(),
   "src/app/(app)/settings/compliance-settings/page.tsx",
@@ -33,10 +25,6 @@ const adminToolsPagePath = resolve(
 const salaryGradesPagePath = resolve(
   process.cwd(),
   "src/app/(app)/settings/salary-grades/page.tsx",
-);
-const payrollSalariesPagePath = resolve(
-  process.cwd(),
-  "src/app/(app)/payroll/salaries/page.tsx",
 );
 const salaryStructuresRoutePath = resolve(
   process.cwd(),
@@ -138,11 +126,9 @@ describe("admin settings surface", () => {
     expect(dashboardActionsSource).not.toContain('href: "/settings/compliance-settings"');
   });
 
-  it("does not expose salary assignment quick actions or payroll shortcuts", () => {
+  it("does not expose salary assignment quick actions", () => {
     expect(dashboardActionsSource).not.toContain('href: "/payroll/salaries"');
     expect(dashboardActionsSource).not.toContain('label: "View Salaries"');
-    expect(payrollPageSource).not.toContain('router.push("/payroll/salaries")');
-    expect(payrollPageSource).not.toContain("Salary Assignments");
   });
 
   it("does not ship the old compliance settings page route", () => {
@@ -155,17 +141,10 @@ describe("admin settings surface", () => {
 
   it("does not ship salary grade or salary assignment routes and apis", () => {
     expect(existsSync(salaryGradesPagePath)).toBe(false);
-    expect(existsSync(payrollSalariesPagePath)).toBe(false);
     expect(existsSync(salaryStructuresRoutePath)).toBe(false);
     expect(existsSync(salaryStructuresDetailRoutePath)).toBe(false);
     expect(existsSync(employeeSalariesRoutePath)).toBe(false);
     expect(existsSync(employeeSalaryRoutePath)).toBe(false);
   });
 
-  it("does not keep salary structure collections in the payroll run route", () => {
-    expect(payrollRunRouteSource).not.toContain("employeeSalaries");
-    expect(payrollRunRouteSource).not.toContain("salaryStructures");
-    expect(payrollRunRouteSource).not.toContain("salaryStructureId");
-    expect(payrollRunRouteSource).not.toContain("salaryStructureName");
-  });
 });

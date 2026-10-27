@@ -52,6 +52,12 @@ type RegionFormState = {
   messagingSenderId: string;
   measurementId: string;
   regionAdminEmail: string;
+  serviceAccountJson: string;
+  googleServicesJson: string;
+  allowedDomains: string;
+  androidAppId: string;
+  androidApiKey: string;
+  androidPackageName: string;
 };
 
 const emptyCreateForm: RegionFormState = {
@@ -65,6 +71,12 @@ const emptyCreateForm: RegionFormState = {
   messagingSenderId: "",
   measurementId: "",
   regionAdminEmail: "",
+  serviceAccountJson: "",
+  googleServicesJson: "",
+  allowedDomains: "",
+  androidAppId: "",
+  androidApiKey: "",
+  androidPackageName: "",
 };
 
 const emptyAdminForm = {
@@ -87,6 +99,9 @@ function checklistItems(region?: RegionRecord | null) {
     { label: "Firebase validated", done: checklist?.firebaseValidated ?? false },
     { label: "Defaults seeded", done: checklist?.defaultsSeeded ?? false },
     { label: "Region admin created", done: checklist?.regionAdminCreated ?? false },
+    { label: "Rules deployed", done: checklist?.rulesDeployed ?? false },
+    { label: "Indexes deployed", done: checklist?.indexesDeployed ?? false },
+    { label: "Storage bucket verified", done: checklist?.storageBucketVerified ?? false },
     { label: "Vercel configured", done: checklist?.vercelConfigured ?? false },
   ];
 }
@@ -104,6 +119,13 @@ function regionToForm(region: RegionRecord | null): RegionFormState {
     messagingSenderId: region.messagingSenderId ?? "",
     measurementId: region.measurementId ?? "",
     regionAdminEmail: region.regionAdminEmail ?? "",
+    // Secrets are never read back from the server.
+    serviceAccountJson: "",
+    googleServicesJson: "",
+    allowedDomains: (region.allowedDomains ?? []).join("\n"),
+    androidAppId: region.androidAppId ?? "",
+    androidApiKey: region.androidApiKey ?? "",
+    androidPackageName: region.androidPackageName ?? "",
   };
 }
 
@@ -179,6 +201,8 @@ export default function RegionOnboardingPage() {
   const [isAutomating, setIsAutomating] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
   const [isProvisioning, setIsProvisioning] = useState(false);
+  const [isSettingUpDatabase, setIsSettingUpDatabase] = useState(false);
+  const [databaseSetupResult, setDatabaseSetupResult] = useState<any>(null);
   const [isAddingDomain, setIsAddingDomain] = useState(false);
   const [isPolling, setIsPolling] = useState(false);
   const [automationJob, setAutomationJob] = useState<any>(null);
@@ -259,15 +283,49 @@ export default function RegionOnboardingPage() {
       });
       return;
     }
+    if (createForm.serviceAccountJson.trim() && !createForm.storageBucket.trim()) {
+      toast({
+        title: "Storage bucket required",
+        description:
+          "A BYO Firebase enrolment needs the Storage bucket so documents and training uploads work.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     setIsCreating(true);
     try {
       const res = await authorizedFetch("/api/super-admin/regions", {
         method: "POST",
-        body: JSON.stringify(createForm),
+        body: JSON.stringify({
+          ...createForm,
+          serviceAccountJson: createForm.serviceAccountJson.trim() || undefined,
+          googleServicesJson: createForm.googleServicesJson.trim() || undefined,
+          allowedDomains: createForm.allowedDomains
+            .split(/[,\n]/)
+            .map((domain) => domain.trim())
+            .filter(Boolean),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
+        if (res.status === 422 && data?.id) {
+          // The region record is saved but Firebase validation failed. Do not
+          // leave the operator retrying Create (that would 409); select the
+          // saved region so they can use the validation action instead.
+          await loadRegions();
+          setSelectedRegionId(data.id);
+          setCreateDialogOpen(false);
+          setCreateForm(emptyCreateForm);
+          toast({
+            title: "Region saved — validation failed",
+            description:
+              data.error ||
+              "Open the region and retry Firebase validation after fixing the credentials.",
+            variant: "destructive",
+          });
+          return;
+        }
         throw new Error(data.error || "Could not create region.");
       }
 
@@ -537,6 +595,37 @@ export default function RegionOnboardingPage() {
     }
   };
 
+  const handleDatabaseSetup = async () => {
+    if (!selectedRegion || selectedRegion.isSynthetic) return;
+    setIsSettingUpDatabase(true);
+    setDatabaseSetupResult(null);
+    setAutomationError(null);
+    try {
+      const res = await authorizedFetch(
+        `/api/super-admin/regions/${selectedRegion.id}/database-setup`,
+        { method: "POST" },
+      );
+      const data = await res.json();
+      setDatabaseSetupResult(data);
+      if (!res.ok) {
+        throw new Error(
+          data.error ||
+            `Database setup incomplete${data.failedStep ? ` at ${data.failedStep}` : ""}.`,
+        );
+      }
+      toast({
+        title: "Database setup complete",
+        description: "Firestore rules, Storage rules, indexes and the bucket were applied.",
+      });
+      await refreshSelectedRegion();
+    } catch (error: any) {
+      setAutomationError(error?.message || "Database setup failed.");
+      toast({ title: "Database setup", description: error?.message, variant: "destructive" });
+    } finally {
+      setIsSettingUpDatabase(false);
+    }
+  };
+
   const handleAddDomain = async () => {
     setShowDomainDialog(!showDomainDialog);
     setDomainResult(null);
@@ -544,17 +633,28 @@ export default function RegionOnboardingPage() {
   };
 
   const handleConfirmDomain = async () => {
-    if (!selectedRegion || selectedRegion.isSynthetic || !domainInput.trim()) return;
+    const domains = domainInput
+      .split(/[,\n]/)
+      .map((domain) => domain.trim())
+      .filter(Boolean);
+    if (!selectedRegion || selectedRegion.isSynthetic || domains.length === 0) return;
     setIsAddingDomain(true);
     try {
       const res = await authorizedFetch(`/api/super-admin/regions/${selectedRegion.id}/domain`, {
         method: "POST",
-        body: JSON.stringify({ domain: domainInput.trim() }),
+        body: JSON.stringify({ domains }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to add domain.");
       setDomainResult(data);
-      toast({ title: "Domain added", description: data.dnsInstruction });
+      toast({
+        title: "Domain added",
+        description:
+          data.dnsInstructions?.join(" ") ||
+          data.dnsInstruction ||
+          "DNS record instructions are shown below.",
+      });
+      await refreshSelectedRegion();
     } catch (error: any) {
       toast({ title: "Domain error", description: error?.message, variant: "destructive" });
     } finally {
@@ -692,6 +792,25 @@ export default function RegionOnboardingPage() {
                   <p><span className="font-medium">Encrypted HQ connection:</span> {selectedRegion.persistentConnectionReady ? "Ready" : "Pending"}</p>
                   <p><span className="font-medium">Vercel Project:</span> {selectedRegion.vercelProjectName || "Pending"}</p>
                   <p><span className="font-medium">Regional App:</span> {selectedRegion.vercelProductionUrl || "Pending"}</p>
+                  <p><span className="font-medium">Onboarding:</span>{" "}
+                    <Badge variant="secondary" className="align-middle">
+                      {selectedRegion.onboardingMode === "automated" ? "Automated" : "BYO Firebase"}
+                    </Badge>
+                  </p>
+                  <p><span className="font-medium">Android App ID:</span> {selectedRegion.androidAppId || "Pending"}</p>
+                  <p><span className="font-medium">Android Package:</span> {selectedRegion.androidPackageName || "Pending"}</p>
+                  <p><span className="font-medium">Database setup:</span>{" "}
+                    {selectedRegion.onboardingChecklist?.rulesDeployed &&
+                    selectedRegion.onboardingChecklist?.indexesDeployed &&
+                    selectedRegion.onboardingChecklist?.storageBucketVerified
+                      ? "Rules, indexes and bucket applied"
+                      : "Pending"}
+                  </p>
+                  <p><span className="font-medium">Locked domains:</span>{" "}
+                    {(selectedRegion.allowedDomains ?? []).length > 0
+                      ? selectedRegion.allowedDomains!.join(", ")
+                      : "Not locked"}
+                  </p>
                 </div>
                 <div className="rounded-xl border p-4">
                   <p className="text-sm font-semibold">Wizard Progress</p>
@@ -1020,6 +1139,15 @@ export default function RegionOnboardingPage() {
                   <Button
                     variant="outline"
                     size="sm"
+                    onClick={handleDatabaseSetup}
+                    disabled={isSettingUpDatabase || selectedRegion.isSynthetic}
+                  >
+                    {isSettingUpDatabase ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Database className="mr-2 h-4 w-4" />}
+                    Apply database setup
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={handleAddDomain}
                     disabled={isAddingDomain || selectedRegion.isSynthetic}
                   >
@@ -1081,6 +1209,41 @@ export default function RegionOnboardingPage() {
                   </div>
                 )}
 
+                {databaseSetupResult && (
+                  <div className="rounded-xl border p-4 space-y-2">
+                    <p className="text-sm font-medium">
+                      Database setup:{" "}
+                      <Badge variant={databaseSetupResult.ok ? "default" : "destructive"}>
+                        {databaseSetupResult.ok ? "Applied" : "Incomplete"}
+                      </Badge>
+                    </p>
+                    <div className="space-y-1.5 text-sm">
+                      {[
+                        ["Firestore rules", databaseSetupResult.steps?.firestoreRules],
+                        ["Storage rules", databaseSetupResult.steps?.storageRules],
+                        ["Indexes", databaseSetupResult.steps?.indexes],
+                        ["Storage bucket", databaseSetupResult.steps?.bucket],
+                      ].map(([label, value]: any) =>
+                        value ? (
+                          <div key={label} className="flex items-start gap-2">
+                            <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 text-success" />
+                            <span className="flex-1">{label}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {typeof value === "string" ? value : "OK"}
+                            </span>
+                          </div>
+                        ) : null,
+                      )}
+                    </div>
+                    {databaseSetupResult.failedStep && (
+                      <p className="text-xs text-destructive">
+                        Failed at {databaseSetupResult.failedStep}.{" "}
+                        {databaseSetupResult.error}
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {/* Domain dialog */}
                 {showDomainDialog && (
                   <div className="rounded-xl border p-4 space-y-3">
@@ -1097,8 +1260,19 @@ export default function RegionOnboardingPage() {
                     </div>
                     {domainResult && (
                       <div className="text-sm space-y-1 text-muted-foreground">
-                        <p className="text-success font-medium">Domain added: {domainResult.domain}</p>
-                        <p className="text-xs">{domainResult.dnsInstruction}</p>
+                        <p className="text-success font-medium">
+                          Locked domains:{" "}
+                          {(domainResult.domains ?? domainResult.added ?? []).join(", ") ||
+                            domainResult.domain}
+                        </p>
+                        {(domainResult.dnsInstructions ??
+                          [domainResult.dnsInstruction])
+                          .filter(Boolean)
+                          .map((instruction: string, index: number) => (
+                            <p key={index} className="text-xs">
+                              {instruction}
+                            </p>
+                          ))}
                       </div>
                     )}
                   </div>
@@ -1196,12 +1370,16 @@ export default function RegionOnboardingPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Storage Bucket</Label>
+              <Label>Storage Bucket *</Label>
               <Input
                 value={createForm.storageBucket}
                 onChange={(e) => setCreateForm((current) => ({ ...current, storageBucket: e.target.value }))}
                 placeholder="project.firebasestorage.app"
               />
+              <p className="text-xs text-muted-foreground">
+                Required for BYO Firebase: documents, attendance photos and training
+                material use this bucket.
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label>Auth Domain</Label>
@@ -1235,6 +1413,49 @@ export default function RegionOnboardingPage() {
                 onChange={(e) => setCreateForm((current) => ({ ...current, regionAdminEmail: e.target.value }))}
                 placeholder="regional-admin@example.com"
               />
+            </div>
+            <div className="space-y-1.5 md:col-span-2">
+              <Label>Locked domains</Label>
+              <Textarea
+                rows={2}
+                value={createForm.allowedDomains}
+                onChange={(e) => setCreateForm((current) => ({ ...current, allowedDomains: e.target.value }))}
+                placeholder={"ciss-tn.in\n*.ciss-tn.in"}
+                className="font-mono text-xs"
+              />
+              <p className="text-xs text-muted-foreground">
+                One hostname per line. The regional deployment will refuse every other Host.
+                Leave empty to keep the deployment unlocked until it is enrolled.
+              </p>
+            </div>
+            <div className="space-y-1.5 md:col-span-2">
+              <Label>Android google-services.json (optional)</Label>
+              <Textarea
+                rows={4}
+                value={createForm.googleServicesJson}
+                onChange={(e) => setCreateForm((current) => ({ ...current, googleServicesJson: e.target.value }))}
+                placeholder='{"project_info":{"project_id":"..."},"client":[...]}'
+                className="font-mono text-xs"
+              />
+              <p className="text-xs text-muted-foreground">
+                Paste the state&apos;s Firebase Android config. The Android app initialises Firebase
+                dynamically from the region config, so this is only needed to fill the Android app
+                ID/key automatically and for a state-specific APK build.
+              </p>
+            </div>
+            <div className="space-y-1.5 md:col-span-2">
+              <Label>Service account JSON</Label>
+              <Textarea
+                rows={4}
+                value={createForm.serviceAccountJson}
+                onChange={(e) => setCreateForm((current) => ({ ...current, serviceAccountJson: e.target.value }))}
+                placeholder='{"type":"service_account","project_id":"...","private_key":"..."}'
+                className="font-mono text-xs"
+              />
+              <p className="text-xs text-muted-foreground">
+                From the state project&apos;s Firebase settings. It is validated against the project
+                and stored AES-GCM encrypted; it is never returned to this page again.
+              </p>
             </div>
           </div>
           <div className="mt-2 flex justify-end gap-3">

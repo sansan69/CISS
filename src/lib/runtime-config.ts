@@ -12,6 +12,17 @@ export const REGION_CODE =
     "KL"
   ).toUpperCase();
 
+export function getRegionStateCode(value: unknown): string {
+  return typeof value === "string" && value.trim() ? value.trim() : REGION_CODE;
+}
+
+export const REGION_ALLOWED_DOMAINS = (process.env.REGION_ALLOWED_DOMAINS ?? "")
+  .split(",")
+  .map((domain) => domain.trim())
+  .filter(Boolean);
+
+export const isHostLockEnabled = REGION_ALLOWED_DOMAINS.length > 0;
+
 export const REGION_NAME =
   process.env.NEXT_PUBLIC_REGION_NAME?.trim() ||
   process.env.REGION_NAME?.trim() ||

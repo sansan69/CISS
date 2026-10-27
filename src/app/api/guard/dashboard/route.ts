@@ -203,7 +203,6 @@ export async function GET(request: Request) {
     const presentDays = presentDates.size;
     const workingDays = workingDaysInMonth(year, month);
     const absentDays = Math.max(0, workingDays - presentDays);
-    const leaveBalance = null;
 
     // Recent 5 logs
     const recentAttendance = filteredLogs.slice(0, 5).map((l) => ({
@@ -303,7 +302,6 @@ export async function GET(request: Request) {
       district,
       profilePhotoUrl,
       attendanceStats: { presentDays, absentDays, workingDays },
-      leaveBalance,
       latestEvalScore,
       latestEvalPeriod,
       nextShift,

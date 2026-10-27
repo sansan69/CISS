@@ -3,17 +3,42 @@
  * Works in both Node.js (18+) and browsers — no node:crypto import.
  */
 
-const QR_SECRET =
-  process.env.CISS_QR_SECRET ||
-  process.env.NEXT_PUBLIC_FIREBASE_API_KEY ||
-  "ciss-default-qr-secret";
+const DEVELOPMENT_QR_SECRET = "ciss-qr-development-secret-only";
+
+/**
+ * The QR badge signature key. It must never fall back to a value an anonymous
+ * caller can read (`NEXT_PUBLIC_*` is served by `/api/public/region-config`) or
+ * to a literal committed to the repository.
+ *
+ * Server-only secrets already required for attendance token issuance are
+ * accepted as fallbacks so a deployment that already works does not need a new
+ * environment variable on day one. In production, if none is present, this
+ * throws instead of silently signing badges with a public value.
+ */
+function getQrSecret(): string {
+  const secret =
+    process.env.CISS_QR_SECRET ||
+    process.env.ATTENDANCE_VERIFICATION_SECRET ||
+    process.env.UPLOAD_TOKEN_SECRET ||
+    process.env.NEXTAUTH_SECRET;
+
+  if (secret) return secret;
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "CISS_QR_SECRET (or ATTENDANCE_VERIFICATION_SECRET/UPLOAD_TOKEN_SECRET/NEXTAUTH_SECRET) must be configured in production.",
+    );
+  }
+
+  return DEVELOPMENT_QR_SECRET;
+}
 
 let _cachedKey: CryptoKey | null = null;
 
 async function getHmacKey(): Promise<CryptoKey> {
   if (_cachedKey) return _cachedKey;
   const encoder = new TextEncoder();
-  const keyData = encoder.encode(QR_SECRET);
+  const keyData = encoder.encode(getQrSecret());
   _cachedKey = await crypto.subtle.importKey(
     "raw",
     keyData,

@@ -6,7 +6,7 @@ import { resolveEmployeeDistrict } from "@/lib/employees/visibility";
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
 export const runtime = "nodejs";
 
-type NotificationType = "work_order" | "attendance_marked" | "leave_approved" | "training_assigned" | "broadcast" | "report_review";
+type NotificationType = "work_order" | "attendance_marked" | "training_assigned" | "broadcast" | "report_review";
 type NotificationAudience = "guard" | "fieldOfficer" | "all";
 
 type NotificationRecipient = {
@@ -138,22 +138,27 @@ export async function POST(request: NextRequest) {
     const recipients = await resolveRecipients(targetRole, targetDistrict);
 
     await Promise.all(
-      recipients.map((recipient) =>
-        db.collection("notifications").add({
+      recipients.map((recipient) => {
+        // Firestore rejects `undefined` field values outright, so optional
+        // fields must be omitted rather than set to undefined. Non-UI callers
+        // (mobile, scripts) legitimately send no `data`, and a recipient with
+        // no district must not break the whole broadcast.
+        const recipientDistrict = targetDistrict ?? recipient.district;
+        return db.collection("notifications").add({
           broadcastId: notifId,
           type: "broadcast",
           title,
           body: msgBody,
           recipientUid: recipient.uid,
           recipientRole: recipient.role,
-          recipientDistrict: targetDistrict ?? recipient.district ?? undefined,
+          ...(recipientDistrict ? { recipientDistrict } : {}),
           audienceRole: targetRole,
-          data: data || undefined,
+          ...(data ? { data } : {}),
           read: false,
           createdAt: FieldValue.serverTimestamp(),
           createdBy: adminUser.uid,
-        }),
-      ),
+        });
+      }),
     );
 
     // FCM push — best effort, non-blocking. Lazy-load messaging to avoid

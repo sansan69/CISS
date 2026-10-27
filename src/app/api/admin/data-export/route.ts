@@ -22,6 +22,30 @@ export async function POST(request: NextRequest) {
 
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
 
+    // attendanceLogs and employees do not carry a `clientId` (only 154 of 1,961
+    // employees do); their client dimension is `clientName`. Resolve the
+    // selected client id to its name once and filter on the field that exists,
+    // otherwise the export either returns nothing or throws FAILED_PRECONDITION
+    // on the non-existent `date`/`clientId` composite.
+    let clientName: string | null = null;
+    if (clientId) {
+      const clientSnap = await adminDb.collection("clients").doc(clientId).get();
+      if (clientSnap.exists) {
+        const client = clientSnap.data() as Record<string, unknown>;
+        const rawName =
+          (typeof client.name === "string" && client.name) ||
+          (typeof client.clientName === "string" && client.clientName) ||
+          "";
+        clientName = normalizeText(rawName) || null;
+      }
+      if (!clientName) {
+        return NextResponse.json(
+          { error: "Client not found or has no name." },
+          { status: 404 },
+        );
+      }
+    }
+
     let data: Record<string, unknown>[] = [];
 
     if (type === "attendance") {
@@ -32,17 +56,25 @@ export async function POST(request: NextRequest) {
       if (startDate) {
         const from = new Date(startDate);
         if (!Number.isNaN(from.getTime())) {
-          query = query.where("date", ">=", from.toISOString().split("T")[0]);
+          query = query.where(
+            "attendanceDate",
+            ">=",
+            from.toISOString().split("T")[0],
+          );
         }
       }
       if (endDate) {
         const to = new Date(endDate);
         if (!Number.isNaN(to.getTime())) {
-          query = query.where("date", "<=", to.toISOString().split("T")[0]);
+          query = query.where(
+            "attendanceDate",
+            "<=",
+            to.toISOString().split("T")[0],
+          );
         }
       }
-      if (clientId) {
-        query = query.where("clientId", "==", clientId);
+      if (clientName) {
+        query = query.where("clientName", "==", clientName);
       }
 
       const snapshot = await query.get();
@@ -55,8 +87,8 @@ export async function POST(request: NextRequest) {
         .collection("employees")
         .limit(1000);
 
-      if (clientId) {
-        query = query.where("clientId", "==", clientId);
+      if (clientName) {
+        query = query.where("clientName", "==", clientName);
       }
 
       const snapshot = await query.get();

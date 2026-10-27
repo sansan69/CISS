@@ -36,10 +36,9 @@ service cloud.firestore {
       );
     }
 
-    // Returns the site ID the guard is currently assigned to (from custom claims)
-    function guardAssignedSiteId() {
-      return request.auth.token.assignedSiteId;
-    }
+    // Site-scoped guard reads were removed: no guard token carries
+    // `assignedSiteId` (0/691 at the 2026-10-26 database audit), and guard
+    // clients receive site data from the signed-in server routes instead.
 
     function isAdmin() {
       return isSignedIn() && (
@@ -82,18 +81,25 @@ service cloud.firestore {
       return request.auth.token.stateCode;
     }
 
+    // Backfilled documents now all carry stateCode, so a missing claim can no
+    // longer be treated as a wildcard. Guards and client users are exempt
+    // because they are already scoped by ownership/client membership inside
+    // this regional project; staff must carry a matching claim. Super-admin is
+    // the explicit cross-state exception.
+    function stateClaimMatches(value) {
+      return !('stateCode' in value) ||
+        isSuperAdmin() ||
+        isGuard() ||
+        isClientUser() ||
+        (userStateCode() != null && value.stateCode == userStateCode());
+    }
+
     function readStateMatches() {
-      return !('stateCode' in resource.data) ||
-        userStateCode() == null ||
-        resource.data.stateCode == userStateCode() ||
-        isSuperAdmin();
+      return stateClaimMatches(resource.data);
     }
 
     function writeStateMatches() {
-      return !('stateCode' in request.resource.data) ||
-        userStateCode() == null ||
-        request.resource.data.stateCode == userStateCode() ||
-        isSuperAdmin();
+      return stateClaimMatches(request.resource.data);
     }
 
     // Returns the clientName claim for the signed-in client user (set at login via custom claims)
@@ -206,6 +212,9 @@ service cloud.firestore {
     }
 
     match /employees/{employeeId} {
+      // Client users are deliberately absent: they read their guards through
+      // /api/client/guards and /api/employees/profile/{id}, which return the
+      // allow-listed serializeGuardProfileView (no bank/PAN/PIN/auth fields).
       allow read: if readStateMatches() && (isAdmin() || isHR() || isAccounts() || isCompliance() ||
         isFieldOfficerForEmployee() ||
         (isGuard() && (
@@ -226,7 +235,22 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Guard PIN hashes. Server-only: the hash on a 4–6-digit PIN is
+    // brute-forceable offline, so it must never be readable by a client SDK
+    // session, including client users and field officers.
+    match /guardCredentials/{employeeDocId} {
+      allow read, write: if false;
+    }
+
     match /sensitiveDocumentAuditLogs/{eventId} {
+      allow read, write: if false;
+    }
+
+    // Single-use attendance identity proofs (subject + actor + nonce). Server
+    // only: a client that could read it would learn live proofs, and a client
+    // that could write it could mint its own. `expireAt` is intended for a
+    // Firestore TTL policy.
+    match /attendanceVerificationProofs/{proofId} {
       allow read, write: if false;
     }
 
@@ -247,30 +271,31 @@ service cloud.firestore {
     // Raw documents include coordinates and operational metadata — direct
     // Firestore reads are scoped by role:
     //   - Staff: full read (operational need)
-    //   - Client user: only their own client documents
-    //   - Guard: only their assigned site / client the site belongs to
+    //   - Client user: only their own client documents (`clients.name` is the
+    //     field that actually exists; sites/locations use `clientName`)
+    //   - Guards: no direct read — they receive site data from the signed-in
+    //     server routes. No guard claim carries `assignedSiteId`, so the old
+    //     guard branch was permanently false and its `sites.siteId` comparison
+    //     was type-broken (number 109 / string 61 / absent 10).
     //   - No unauthenticated reads.
 
     match /clients/{clientId} {
       allow read: if readStateMatches() && (isStaff() ||
-        isOwnClientDoc('companyName') ||
-        (isGuard() && guardAssignedSiteId() != null));
+        isOwnClientDoc('name'));
       allow create, update: if isAdmin() && writeStateMatches();
       allow delete: if isAdmin() && readStateMatches();
     }
 
     match /sites/{siteId} {
       allow read: if readStateMatches() && (isStaff() ||
-        isOwnClientDoc('clientName') ||
-        (isGuard() && resource.data.siteId == guardAssignedSiteId()));
+        isOwnClientDoc('clientName'));
       allow create, update: if isAdmin() && writeStateMatches();
       allow delete: if isAdmin() && readStateMatches();
     }
 
     match /clientLocations/{locationId} {
       allow read: if readStateMatches() && (isStaff() ||
-        isOwnClientDoc('clientName') ||
-        (isGuard() && guardAssignedSiteId() != null));
+        isOwnClientDoc('clientName'));
       allow create, update: if isAdmin() && writeStateMatches();
       allow delete: if isAdmin() && readStateMatches();
     }
@@ -369,25 +394,27 @@ service cloud.firestore {
       allow delete: if isAdmin() && readStateMatches();
     }
 
-    // Legacy plural collection — retained for backwards-compatibility only
+    // Legacy plural collection — no client code reads or writes it. Guards
+    // previously had an unvalidated write path here (an arbitrary-content write
+    // into an unused collection), so it is server-only now.
     match /attendanceStates/{employeeId} {
-      allow read: if readStateMatches() && (isAdmin() || (isGuard() && guardEmployeeDocId() == employeeId));
-      allow create, update: if (isAdmin() || (isGuard() && guardEmployeeDocId() == employeeId)) && writeStateMatches();
-      allow delete: if isAdmin() && readStateMatches();
+      allow read, write: if false;
     }
 
     // ── payrollEntries ───────────────────────────────────────────────────────
     // Guards can read their own payslips. Accounts/Admin write all.
 
     match /payrollEntries/{entryId} {
-      // Guards can read their own payslips — matched by either Firestore doc ID or employee code
-      allow read: if readStateMatches() && (isAdmin() || isAccounts() || isHR() ||
-        (isGuard() && (
-          resource.data.employeeDocId == guardEmployeeDocId() ||
-          resource.data.employeeId == guardEmployeeId()
-        )));
-      allow create, update: if (isAdmin() || isAccounts()) && writeStateMatches();
-      allow delete: if (isAdmin() || isAccounts()) && readStateMatches();
+      allow read, write: if false;
+    }
+
+    // payslipDocuments — server-only. Each document names an employee and their
+    // pay period, so listing the collection would leak who is paid what and
+    // when. Guards reach their own slips through /api/guard/payslips, which
+    // enforces employeeDocId ownership; admin uploads and listing go through
+    // authenticated server routes.
+    match /payslipDocuments/{docId} {
+      allow read, write: if false;
     }
 
     // ── Training & Evaluation ────────────────────────────────────────────────
@@ -430,26 +457,23 @@ service cloud.firestore {
     // ── Payroll & Compliance (admin/accounts/HR only) ─────────────────────────
 
     match /complianceSettings/{docId} {
-      allow read: if isAdmin() || isCompliance() || isHR() || isAccounts();
-      allow write: if isAdmin() || isCompliance();
+      allow read, write: if false;
     }
 
     match /clientWageConfig/{configId} {
-      allow read: if isAdmin() || isAccounts();
-      allow write: if isAdmin() || isAccounts();
+      allow read, write: if false;
     }
 
     match /salaryStructures/{structureId} {
-      allow read, write: if isAdmin() || isAccounts();
+      allow read, write: if false;
     }
 
     match /employeeSalaries/{salaryId} {
-      allow read, write: if isAdmin() || isAccounts();
+      allow read, write: if false;
     }
 
     match /payrollCycles/{runId} {
-      allow read: if isAdmin() || isAccounts() || isHR();
-      allow write: if isAdmin() || isAccounts();
+      allow read, write: if false;
     }
 
     // ── System & internal ───────────────────────────────────────────────────
@@ -601,6 +625,10 @@ service cloud.firestore {
     }
 
     match /leaveRequests/{docId} {
+      allow read, write: if false;
+    }
+
+    match /leaveBalances/{docId} {
       allow read, write: if false;
     }
 

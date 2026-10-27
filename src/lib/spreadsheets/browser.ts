@@ -1,6 +1,7 @@
 "use client";
 
 import { parse } from "csv-parse/browser/esm/sync";
+import { escapeCsvValue } from "@/lib/csv";
 import readXlsxFile from "read-excel-file/browser";
 import writeXlsxFile, {
   type Cell,
@@ -74,11 +75,9 @@ export function downloadCsv(fileName: string, rows: TabularRow[]) {
   const csv = rows
     .map((row) =>
       row
-        .map((value) => {
-          const text =
-            value instanceof Date ? value.toISOString() : String(value ?? "");
-          return `"${text.replaceAll('"', '""')}"`;
-        })
+        .map((value) =>
+          escapeCsvValue(value instanceof Date ? value.toISOString() : value),
+        )
         .join(","),
     )
     .join("\r\n");

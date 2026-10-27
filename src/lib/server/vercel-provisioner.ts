@@ -51,6 +51,10 @@ export async function buildRegionEnvConfig(region: RegionRecord): Promise<Record
   if (region.measurementId) env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID = region.measurementId;
   if (region.androidAppId) env.NEXT_PUBLIC_FIREBASE_ANDROID_APP_ID = region.androidAppId;
   if (region.androidApiKey) env.NEXT_PUBLIC_FIREBASE_ANDROID_API_KEY = region.androidApiKey;
+  const allowedDomains = (region as { allowedDomains?: string[] | null }).allowedDomains;
+  if (Array.isArray(allowedDomains) && allowedDomains.length > 0) {
+    env.REGION_ALLOWED_DOMAINS = allowedDomains.join(",");
+  }
 
   return env;
 }
@@ -112,6 +116,52 @@ export async function setVercelEnvVars(projectName: string, envVars: Record<stri
       }),
     });
   }
+}
+
+/**
+ * Create or replace a single Vercel environment variable.
+ *
+ * `setVercelEnvVars` deliberately skips existing keys (used at first
+ * provisioning); changing a lock after provisioning needs an update, then a
+ * redeploy for the new value to take effect.
+ */
+export async function upsertVercelEnvVar(
+  projectName: string,
+  key: string,
+  value: string,
+  target = "production",
+): Promise<void> {
+  const existing = await vercelApi(
+    `/v10/projects/${projectName}/env?limit=100`,
+  ).catch(() => ({
+    envs: [] as Array<{ id?: string; key?: string; target?: unknown }>,
+  }));
+  const match = (existing.envs || []).find((env: {
+    key?: string;
+    target?: unknown;
+  }) => {
+    if (env.key !== key) return false;
+    if (Array.isArray(env.target)) return env.target.includes(target);
+    return env.target === target;
+  });
+  if (match?.id) {
+    // Update only the value: sending target would replace this entry's target
+    // list and could drop a preview/development assignment.
+    await vercelApi(`/v9/projects/${projectName}/env/${match.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ value }),
+    });
+    return;
+  }
+  await vercelApi(`/v10/projects/${projectName}/env`, {
+    method: "POST",
+    body: JSON.stringify({
+      type: "encrypted",
+      key,
+      value,
+      target: [target],
+    }),
+  });
 }
 
 export async function deployRegionProject(projectName: string): Promise<{ url: string; alias: string[] }> {

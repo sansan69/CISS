@@ -6,8 +6,8 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   ChartBar,
   CalendarCheck,
-  Wallet,
   DotsThree,
+  FileText,
   GraduationCap,
   Star,
   User,
@@ -28,11 +28,11 @@ interface NavTab {
 const navTabs: NavTab[] = [
   { href: "/guard/dashboard",  label: "Home",       icon: ChartBar },
   { href: "/guard/attendance", label: "Attendance", icon: CalendarCheck   },
-  { href: "/guard/payslips",   label: "Pay",        icon: Wallet          },
 ];
 
 const moreItems = [
   { href: "/guard/leave", label: "Leave", icon: CalendarCheck },
+  { href: "/guard/payslips", label: "Payslips", icon: FileText },
   { href: "/guard/training",    label: "Training",    icon: GraduationCap },
   { href: "/guard/evaluations", label: "Evaluations", icon: Star          },
   { href: "/guard/profile",     label: "Profile",     icon: User          },

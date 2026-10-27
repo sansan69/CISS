@@ -71,7 +71,7 @@
     "framer-motion": "^12.43.0",
     "genkit": "^1.8.0",
     "leaflet": "^1.9.4",
-    "next": "^15.5.22",
+    "next": "^15.5.28",
     "patch-package": "^8.0.0",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^4.10.38",
@@ -105,6 +105,6 @@
   },
   "overrides": {
     "postcss": "$postcss",
-    "sharp": "0.35.3"
+    "sharp": "0.35.5"
   }
 }

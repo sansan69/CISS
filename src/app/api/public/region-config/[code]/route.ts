@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+
+import { REGION_CODE, REGION_NAME } from "@/lib/runtime-config";
+
 export const runtime = "nodejs";
 
 export async function GET(
@@ -8,14 +11,20 @@ export async function GET(
   try {
     const { code } = await params;
     const regionCode = code.trim().toUpperCase();
-    const { db: adminDb } = await import("@/lib/firebaseAdmin");
 
-    // Kerala is the default/current deployment
-    if (regionCode === "KL") {
+    // The deployment's own region is served from its own environment. Hard-coding
+    // Kerala here meant a non-Kerala deployment answered `/region-config/TN` with
+    // a 404 (its Firestore has no region registry) while answering `/KL` with the
+    // wrong project's config.
+    if (regionCode === REGION_CODE) {
+      const fallbackApiUrl =
+        REGION_CODE === "KL"
+          ? "https://cisskerala.site"
+          : `https://ciss-${REGION_CODE.toLowerCase()}.vercel.app`;
       return NextResponse.json({
-        regionCode: "KL",
-        regionName: "Kerala",
-        apiUrl: process.env.NEXT_PUBLIC_APP_URL || "https://cisskerala.site",
+        regionCode: REGION_CODE,
+        regionName: REGION_NAME,
+        apiUrl: process.env.NEXT_PUBLIC_APP_URL || fallbackApiUrl,
         android: {
           apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
           appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "",
@@ -35,7 +44,9 @@ export async function GET(
       });
     }
 
-    // Look up region record
+    const { db: adminDb } = await import("@/lib/firebaseAdmin");
+
+    // Look up a region registered in this project (control-plane deployments).
     const regionSnap = await adminDb.collection("regions").doc(regionCode).get();
     if (!regionSnap.exists) {
       return NextResponse.json({ error: "Region not found." }, { status: 404 });
