@@ -420,19 +420,27 @@ export async function POST(request: NextRequest) {
     const serverNow = now.toDate();
 
     // ── 3. Idempotency check ──────────────────────────────────────────────
-    if (payload.clientRequestId) {
+    // Mobile builds before 1.0.22 reused one client request id for the IN and
+    // the following OUT. A same-status retry is a duplicate, but a different
+    // status is a new punch and must not be silently swallowed. The derived
+    // suffix keeps that second punch idempotent on its own retries.
+    let effectiveClientRequestId = payload.clientRequestId ?? null;
+    if (effectiveClientRequestId) {
       const duplicate = await findDuplicateSubmission(
         adminDb,
-        payload.clientRequestId,
+        effectiveClientRequestId,
         payload.employeeDocId,
       );
       if (duplicate) {
-        return NextResponse.json({
-          success: true,
-          id: duplicate.id,
-          duplicate: true,
-          message: "Attendance already recorded for this request.",
-        });
+        if (duplicate.status === payload.status) {
+          return NextResponse.json({
+            success: true,
+            id: duplicate.id,
+            duplicate: true,
+            message: "Attendance already recorded for this request.",
+          });
+        }
+        effectiveClientRequestId = `${effectiveClientRequestId}:${payload.status.toLowerCase()}`;
       }
     }
 
@@ -494,8 +502,8 @@ export async function POST(request: NextRequest) {
       .collection("attendanceState")
       .doc(payload.employeeDocId);
     const attendanceLogsCollection = adminDb.collection("attendanceLogs");
-    const attendanceLogRef = payload.clientRequestId
-      ? attendanceLogsCollection.doc(payload.clientRequestId)
+    let attendanceLogRef = effectiveClientRequestId
+      ? attendanceLogsCollection.doc(effectiveClientRequestId)
       : attendanceLogsCollection.doc();
     let transactionDuplicateId: string | null = null;
     let transactionConflict = false;
@@ -520,8 +528,32 @@ export async function POST(request: NextRequest) {
           transactionConflict = true;
           return;
         }
-        transactionDuplicateId = attendanceLogRef.id;
-        return;
+        const existingStatus = String(existing?.status ?? "");
+        if (existingStatus !== payload.status && effectiveClientRequestId) {
+          // A legacy client reused the IN request id for OUT. The preflight
+          // may have missed the concurrently committed IN; resolve the
+          // status-suffixed log inside this transaction before any writes.
+          const suffixedId = `${effectiveClientRequestId}:${payload.status.toLowerCase()}`;
+          const suffixedRef = attendanceLogsCollection.doc(suffixedId);
+          const suffixedSnap = await transaction.get(suffixedRef);
+          if (suffixedSnap.exists) {
+            const suffixedSubject = String(
+              (suffixedSnap.data() as Record<string, unknown> | undefined)
+                ?.employeeDocId ?? "",
+            );
+            if (suffixedSubject && suffixedSubject !== payload.employeeDocId) {
+              transactionConflict = true;
+              return;
+            }
+            transactionDuplicateId = suffixedRef.id;
+            return;
+          }
+          attendanceLogRef = suffixedRef;
+          effectiveClientRequestId = suffixedId;
+        } else {
+          transactionDuplicateId = attendanceLogRef.id;
+          return;
+        }
       }
 
       if (!employeeSnap.exists) {
@@ -954,7 +986,7 @@ export async function POST(request: NextRequest) {
           ? decoded?.employeeDocId ?? null
           : null,
         // Robustness fields
-        processedClientRequestId: payload.clientRequestId ?? null,
+        processedClientRequestId: effectiveClientRequestId,
         attendanceAttemptId: payload.attendanceAttemptId,
         overrideReason: payload.overrideReason ?? null,
         qrToken: payload.qrToken ?? null,
@@ -966,7 +998,7 @@ export async function POST(request: NextRequest) {
               employeeDocId: payload.employeeDocId,
               siteId: payload.siteId,
               status: payload.status,
-              clientRequestId: payload.clientRequestId,
+              clientRequestId: effectiveClientRequestId,
               assistedSubmission,
               attendanceMethod:
                 verification?.method ?? (isAuthenticated ? "authenticated" : null),
