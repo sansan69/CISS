@@ -6,7 +6,7 @@ import {
   parseGuardPhoneInput,
 } from "@/lib/guard/identity-utils";
 import { hashPin, validatePinFormat } from "@/lib/guard/pin-utils";
-import { GUARD_AUTH_EMAIL_DOMAIN } from "@/lib/runtime-config";
+import { GUARD_AUTH_EMAIL_DOMAIN, REGION_CODE } from "@/lib/runtime-config";
 import {
   buildRateLimitKey,
   checkRateLimit,
@@ -259,6 +259,7 @@ export async function POST(request: Request) {
       await mirrorGuardPin(adminDb, empDoc.id, pinHash);
       await adminAuth.setCustomUserClaims(guardUid, {
         role: "guard",
+        stateCode: REGION_CODE,
         employeeId: empData.employeeId,
         employeeDocId: empDoc.id,
       });

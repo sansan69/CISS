@@ -14,6 +14,7 @@ import {
   OPERATIONAL_CLIENT_NAME,
 } from "@/lib/constants";
 import { districtMatches, normalizeDistrictName } from "@/lib/districts";
+import { REGION_CODE } from "@/lib/runtime-config";
 import {
   attendanceSubmissionSchema,
   type AttendanceSubmission,
@@ -840,6 +841,7 @@ export async function POST(request: NextRequest) {
         transaction.set(staleOutLogRef, {
           employeeId: lastState.employeeId ?? payload.employeeId,
           employeeDocId: payload.employeeDocId,
+          stateCode: REGION_CODE,
           employeeName: lastState.employeeName ?? buildGuardName(employeeData, payload.employeeId),
           status: "Out",
           attendanceDate: staleDate,
@@ -900,6 +902,7 @@ export async function POST(request: NextRequest) {
       transaction.set(attendanceLogRef, {
         employeeId: payload.employeeId,
         employeeDocId: payload.employeeDocId,
+        stateCode: REGION_CODE,
         employeeName: payload.employeeName,
         employeePhoneNumber: payload.employeePhoneNumber ?? null,
         reportedAtClient: payload.reportedAtClient ?? null,
@@ -1011,6 +1014,7 @@ export async function POST(request: NextRequest) {
         transaction.set(adminDb.collection("attendanceSessions").doc(attendanceLogRef.id), {
           employeeId: payload.employeeId,
           employeeDocId: payload.employeeDocId,
+          stateCode: REGION_CODE,
           employeeName: payload.employeeName,
           status: "open",
           attendanceDate,
@@ -1064,6 +1068,7 @@ export async function POST(request: NextRequest) {
         {
           employeeDocId: payload.employeeDocId,
           employeeId: payload.employeeId,
+          stateCode: REGION_CODE,
           employeeName: payload.employeeName,
           lastStatus: payload.status,
           lastSiteId: payload.siteId,
@@ -1137,6 +1142,7 @@ export async function POST(request: NextRequest) {
         {
           employeeDocId: liveLocationWrite.employeeDocId,
           employeeId: liveLocationWrite.employeeId,
+          stateCode: REGION_CODE,
           guardName: liveLocationWrite.guardName,
           siteId: liveLocationWrite.siteId,
           siteName: liveLocationWrite.siteName,

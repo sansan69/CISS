@@ -985,6 +985,7 @@ describe("guard auth routes", () => {
     }
     expect(createCustomToken).toHaveBeenCalledWith("guard-uid-1", {
       role: "guard",
+      stateCode: "KL",
       employeeId: "EMP001",
       employeeDocId: "emp-1",
     });
@@ -1032,6 +1033,7 @@ describe("guard auth routes", () => {
     );
     vi.doMock("@/lib/runtime-config", () => ({
       GUARD_AUTH_EMAIL_DOMAIN: "guard.cisskerala.app",
+      REGION_CODE: "KL",
     }));
     vi.doMock("firebase-admin/firestore", () => ({
       Timestamp: {
@@ -1065,6 +1067,7 @@ describe("guard auth routes", () => {
     expect(createUser).toHaveBeenCalledOnce();
     expect(setCustomUserClaims).toHaveBeenCalledWith("guard-uid-2", {
       role: "guard",
+      stateCode: "KL",
       employeeId: "EMP002",
       employeeDocId: "emp-2",
     });
@@ -1235,6 +1238,7 @@ describe("guard auth routes", () => {
       }));
       vi.doMock("@/lib/runtime-config", () => ({
         GUARD_AUTH_EMAIL_DOMAIN: "guard.cisskerala.app",
+        REGION_CODE: "KL",
       }));
       vi.doMock("firebase-admin/firestore", () => ({
         FieldValue: {
@@ -1484,6 +1488,7 @@ describe("guard auth routes", () => {
     }));
     vi.doMock("@/lib/runtime-config", () => ({
       GUARD_AUTH_EMAIL_DOMAIN: "guard.cisskerala.app",
+      REGION_CODE: "KL",
     }));
     vi.doMock("firebase-admin/firestore", () => ({
       Timestamp: {
@@ -1520,6 +1525,7 @@ describe("guard auth routes", () => {
     });
     expect(setCustomUserClaims).toHaveBeenCalledWith("guard-uid-3", {
       role: "guard",
+      stateCode: "KL",
       employeeId: "EMP003",
       employeeDocId: "emp-3",
     });
@@ -1586,6 +1592,7 @@ describe("guard auth routes", () => {
     }));
     vi.doMock("@/lib/runtime-config", () => ({
       GUARD_AUTH_EMAIL_DOMAIN: "guard.cisskerala.app",
+      REGION_CODE: "KL",
     }));
     vi.doMock("firebase-admin/firestore", () => ({
       Timestamp: {

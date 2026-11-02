@@ -1,11 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/firebaseAdmin";
 import { buildPublicAttendanceEmployee } from "@/lib/attendance/public-attendance";
+import {
+  buildRateLimitKey,
+  checkRateLimit,
+  getClientIp,
+} from "@/lib/server/rate-limit";
 
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
   try {
+    // Employee IDs are sequential, so this lookup is enumerable by design.
+    // Rate limit per client IP and per looked-up ID before touching Firestore.
+    const ip = getClientIp(request);
+    const ipLimit = await checkRateLimit(buildRateLimitKey("attendance-employee-ip", ip), {
+      maxRequests: 30,
+      windowMs: 5 * 60_000,
+      failClosed: true,
+    });
+    if (!ipLimit.allowed) {
+      return NextResponse.json(
+        { error: "Too many lookups. Please wait and try again.", found: false },
+        { status: 429, headers: { "Retry-After": "300" } },
+      );
+    }
+
     let employeeId = request.nextUrl.searchParams.get("employeeId")?.trim() || "";
     const phoneNumber =
       request.nextUrl.searchParams.get("phoneNumber")?.replace(/\D/g, "").slice(-10) || "";
@@ -49,6 +69,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         { error: "employeeId, phoneNumber, or resourceId is required.", found: false },
         { status: 400 },
+      );
+    }
+
+    // Per-ID limiter: a single guard retrying is fine, scraping the roster is not.
+    const idLimit = await checkRateLimit(
+      buildRateLimitKey("attendance-employee-id", employeeId.toLowerCase()),
+      { maxRequests: 15, windowMs: 10 * 60_000, failClosed: true },
+    );
+    if (!idLimit.allowed) {
+      return NextResponse.json(
+        { error: "Too many lookups for this employee. Please wait and try again.", found: false },
+        { status: 429, headers: { "Retry-After": "600" } },
       );
     }
 
@@ -140,7 +172,12 @@ export async function GET(request: NextRequest) {
         : undefined,
     );
 
-    return NextResponse.json({ found: true, employee });
+    return NextResponse.json({
+      found: true,
+      // Only echo the phone number back when the caller already proved it by
+      // supplying it. Otherwise an employee-ID walk returns names + mobiles.
+      employee: phoneNumber ? employee : { ...employee, phoneNumber: undefined },
+    });
   } catch (error) {
     console.error("[public/attendance/employee]", error);
     return NextResponse.json(

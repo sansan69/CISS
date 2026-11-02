@@ -17,6 +17,7 @@ import {
 } from "@/lib/server/rate-limit";
 import crypto from "node:crypto";
 import { mirrorGuardPin } from "@/lib/server/guard-credentials";
+import { REGION_CODE } from "@/lib/runtime-config";
 export const runtime = "nodejs";
 
 const AUTH_FAILURE_MESSAGE = "Invalid sign-in details. Please try again.";
@@ -300,6 +301,7 @@ export async function POST(request: Request) {
       loginResult.data.guardAuthUid as string,
       {
         role: "guard",
+        stateCode: REGION_CODE,
         employeeId: loginResult.data.employeeId,
         employeeDocId: empDoc.id,
       },

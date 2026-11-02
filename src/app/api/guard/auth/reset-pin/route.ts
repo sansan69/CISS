@@ -8,7 +8,7 @@ import {
   requireAdmin,
   unauthorizedResponse,
 } from "@/lib/server/auth";
-import { GUARD_AUTH_EMAIL_DOMAIN } from "@/lib/runtime-config";
+import { GUARD_AUTH_EMAIL_DOMAIN, REGION_CODE } from "@/lib/runtime-config";
 import { FieldValue } from "firebase-admin/firestore";
 export const runtime = "nodejs";
 
@@ -86,6 +86,7 @@ async function ensureGuardAuthAccount(empDoc: EmployeeDocLike) {
     try {
       await adminAuth.setCustomUserClaims(guardUid, {
         role: "guard",
+        stateCode: REGION_CODE,
         employeeId: empData.employeeId,
         employeeDocId: empDoc.id,
       });
@@ -99,6 +100,7 @@ async function ensureGuardAuthAccount(empDoc: EmployeeDocLike) {
         guardUid = newUser.uid;
         await adminAuth.setCustomUserClaims(guardUid, {
           role: "guard",
+          stateCode: REGION_CODE,
           employeeId: empData.employeeId,
           employeeDocId: empDoc.id,
         });
@@ -130,6 +132,7 @@ async function ensureGuardAuthAccount(empDoc: EmployeeDocLike) {
 
       await adminAuth.setCustomUserClaims(guardUid, {
         role: "guard",
+        stateCode: REGION_CODE,
         employeeId: empData.employeeId,
         employeeDocId: empDoc.id,
       });

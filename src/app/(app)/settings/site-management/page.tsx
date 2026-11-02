@@ -967,7 +967,7 @@ export default function SiteManagementPage() {
 
                 validRecords.forEach(record => {
                     const siteDocRef = doc(sitesRef);
-                    batch.set(siteDocRef, record);
+                    batch.set(siteDocRef, { ...record, stateCode: REGION_CODE });
                 });
 
                 await batch.commit();

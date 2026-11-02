@@ -220,8 +220,7 @@ service cloud.firestore {
         (isGuard() && (
           employeeId == guardEmployeeDocId() ||
           resource.data.employeeId == guardEmployeeId()
-        )) ||
-        isOwnClientDoc('clientName'));
+        )));
       allow create: if isAdmin() && writeStateMatches() && validTcsCategory(request.resource.data);
       allow update: if isAdmin() && writeStateMatches() &&
         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['tcsCategory', 'clientName']) ||
@@ -528,8 +527,9 @@ service cloud.firestore {
     // ── branches / districts / states (multi-state scaffold) ───────────────
 
     match /branches/{branchId} {
-      allow read: if isSignedIn();
-      allow write: if isSuperAdmin() || isAdmin();
+      allow read: if isAdmin();
+      allow create, update: if (isSuperAdmin() || isAdmin()) && writeStateMatches();
+      allow delete: if isSuperAdmin() && readStateMatches();
     }
 
     match /districts/{districtId} {

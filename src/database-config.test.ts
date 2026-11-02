@@ -491,4 +491,41 @@ describe("database access configuration", () => {
       "!employeeMatchesAnyDistrict(employee, assignedDistricts)",
     );
   });
+
+  it("keeps client users out of raw employee documents", () => {
+    const rules = read("firestore.rules");
+    const block = rules.match(/match \/employees\/\{employeeId\} \{[\s\S]*?\n    \}/)?.[0] ?? "";
+
+    expect(block).toContain("allow read:");
+    // Direct Firestore reads expose bank, PAN and statutory fields. Client users
+    // must go through /api/client/guards and the allow-listed profile projection.
+    expect(block).not.toContain("isOwnClientDoc");
+  });
+
+  it("does not expose branch records to every signed-in user", () => {
+    const rules = read("firestore.rules");
+    const block = rules.match(/match \/branches\/\{branchId\} \{[\s\S]*?\n    \}/)?.[0] ?? "";
+
+    expect(block).toContain("allow read: if isAdmin();");
+    expect(block).not.toContain("allow read: if isSignedIn();");
+  });
+
+  it("stamps stateCode on attendance, notification and site-import writes", () => {
+    const submit = read("src/app/api/attendance/submit/route.ts");
+    const notification = read("src/lib/notifications.ts");
+    const siteImport = read("src/app/(app)/settings/site-management/page.tsx");
+
+    expect(submit).toContain('import { REGION_CODE } from "@/lib/runtime-config";');
+    expect((submit.match(/stateCode: REGION_CODE/g) ?? []).length).toBeGreaterThanOrEqual(4);
+    expect(notification).toContain("stateCode: REGION_CODE");
+    expect(siteImport).toContain("{ ...record, stateCode: REGION_CODE }");
+  });
+
+  it("rate-limits public employee lookup and hides phone numbers from ID walks", () => {
+    const source = read("src/app/api/public/attendance/employee/route.ts");
+
+    expect(source).toContain("checkRateLimit");
+    expect(source).toContain("failClosed: true");
+    expect(source).toContain("employee: phoneNumber ? employee : { ...employee, phoneNumber: undefined }");
+  });
 });

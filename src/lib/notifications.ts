@@ -1,6 +1,7 @@
 // src/lib/notifications.ts
 
 import { db } from '@/lib/firebaseAdmin';
+import { REGION_CODE } from '@/lib/runtime-config';
 
 export type NotificationType = 
   | 'training_assigned'
@@ -17,6 +18,7 @@ export async function sendNotification(params: {
   // Add to notifications collection (for in-app display)
   await db.collection('notifications').add({
     recipientUid: params.recipientUid,
+    stateCode: REGION_CODE,
     type: params.type,
     title: params.title,
     body: params.body,
