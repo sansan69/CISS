@@ -1,18 +1,17 @@
 import { NextResponse } from "next/server";
-import {
-  getAndroidRelease,
-  resolveAndroidApkUrl,
-} from "@/lib/android-release";
+import { getAndroidRelease } from "@/lib/android-release";
 
 export const runtime = "nodejs";
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
     const release = await getAndroidRelease();
-    const target = resolveAndroidApkUrl(release, new URL(request.url).origin);
-
-    return NextResponse.redirect(target, {
+    // A relative Location keeps downloads on the browser's host when the
+    // hosting proxy supplies an internal origin to the Next.js server.
+    return new NextResponse(null, {
+      status: 307,
       headers: {
+        Location: release.apkUrl || release.apkPath,
         "Cache-Control": "no-store, max-age=0",
       },
     });

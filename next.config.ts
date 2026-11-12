@@ -1,5 +1,19 @@
 
 import type {NextConfig} from 'next';
+import androidRelease from './public/downloads/ciss-workforce-android.json';
+
+const androidDownloadAliases = [
+  "/downloads/ciss-workforce-latest.apk",
+  "/downloads/ciss-mobile.apk",
+];
+const apkContentType = {
+  key: "Content-Type",
+  value: "application/vnd.android.package-archive",
+};
+const noStore = { key: "Cache-Control", value: "no-store, max-age=0" };
+const redirectAndroidApk = process.env.CISS_REDIRECT_ANDROID_APK === "true";
+const androidStreamRoute = "/api/public/download/android/file";
+const previousAndroidApk = "/downloads/ciss-workforce-1.0.21.apk";
 
 // Build-time check that NEXT_PUBLIC_FIREBASE_* env vars are present
 const missingFirebaseVars = [
@@ -21,7 +35,14 @@ if (missingFirebaseVars.length > 0) {
 const nextConfig: NextConfig = {
   outputFileTracingRoot: process.cwd(),
   outputFileTracingIncludes: {
-    "/*": ["./node_modules/pdfjs-dist/standard_fonts/**/*"],
+    "/*": [
+      "./node_modules/pdfjs-dist/standard_fonts/**/*",
+      // Next's standalone server only receives traced files. Include the
+      // public assets it serves directly. APK downloads use redirects.
+      "./public/*.{png,ico,json,js,html}",
+      "./public/icons/**/*",
+      "./public/downloads/ciss-workforce-android.json",
+    ],
     // The regional database-setup route reads the repository rules/index
     // manifest at runtime to deploy them to the state's Firebase project.
     "/api/super-admin/regions/**": [
@@ -32,6 +53,21 @@ const nextConfig: NextConfig = {
   },
   serverExternalPackages: ["@napi-rs/canvas", "pdfjs-dist"],
   poweredByHeader: false,
+  async rewrites() {
+    const aliases = androidDownloadAliases.map((source) => ({
+      source,
+      destination: redirectAndroidApk ? androidStreamRoute : androidRelease.apkPath,
+    }));
+    return {
+      beforeFiles: redirectAndroidApk
+        ? [
+            ...aliases,
+            { source: androidRelease.apkPath, destination: androidStreamRoute },
+            { source: previousAndroidApk, destination: `${androidStreamRoute}/legacy` },
+          ]
+        : aliases,
+    };
+  },
   async headers() {
     return [
       {
@@ -59,6 +95,21 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      {
+        source: "/downloads/ciss-workforce-android.json",
+        headers: [{ key: "Content-Type", value: "application/json; charset=utf-8" }, noStore],
+      },
+      {
+        source: "/downloads/:release.apk",
+        headers: [
+          apkContentType,
+          redirectAndroidApk ? noStore : { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+        ],
+      },
+      ...androidDownloadAliases.map((source) => ({
+        source,
+        headers: [apkContentType, noStore],
+      })),
     ];
   },
   images: {

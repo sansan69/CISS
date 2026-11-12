@@ -169,6 +169,16 @@ function notificationRecipients() {
 }
 
 describe("TCS exam import cancellation history", () => {
+  it("rejects a revision without parsed rows without changing the existing order", async () => {
+    const response = await commitRevision([]);
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      error: "At least one parsed row is required to commit.",
+    });
+    expect(store.row("workOrders", "existing-row")?.recordStatus).toBe("active");
+  });
+
   it("keeps a manually removed guard's cancellation history through whole-order importer cancellation", async () => {
     const patched = await patchRoster([{ uid: "guard-b" }]);
     expect(patched.status).toBe(200);

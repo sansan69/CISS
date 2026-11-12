@@ -441,6 +441,28 @@ describe("TCS exam work order import server slice", () => {
     vi.unstubAllGlobals();
   });
 
+  it("rejects a workbook with no parsed duty rows before it can be committed", async () => {
+    parseWorkbookMock.mockReturnValueOnce({
+      parserMode: "legacy-sheet",
+      rows: [],
+      warnings: [{ code: "empty_sheet", message: 'Sheet "Sheet1" did not contain any rows.' }],
+    });
+    const { POST } = await import("./api/admin/work-orders/import/preview/route");
+    const formData = new FormData();
+    formData.set("file", new File(["header"], "tcs-exam.csv"));
+
+    const response = await POST(new Request("http://localhost/api/admin/work-orders/import/preview", {
+      method: "POST",
+      body: formData,
+      headers: { authorization: "Bearer token" },
+    }));
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      error: expect.stringContaining("No duty rows were found"),
+    });
+  });
+
   it("previews parsed workbook rows with hash and duplicate state metadata", async () => {
     const adminDb = new FakeFirestore();
     adminDb.seed("workOrderImports", "import-1", {

@@ -154,7 +154,9 @@ const enrollmentFormSchema = z.object({
   passportDocument: optionalFileSchema,
   
   // Location & Identification
-  district: z.string({ required_error: "District is required." }).min(1, {message: "District is required."}),
+  district: z.string({ required_error: "District is required." })
+    .min(1, { message: "District is required." })
+    .refine(isValidEnrollmentDistrict, { message: "Please choose a valid district for this region." }),
   panNumber: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, { message: "Invalid PAN number format (e.g., ABCDE1234F)." }).optional().or(z.literal('')),
   aadharNumber: z.string().regex(/^\d{12}$/, { message: "Aadhaar number must be 12 digits." }),
   nationality: z.string().optional(),
@@ -332,6 +334,11 @@ type PublicClientsResponse = {
 };
 
 const districtSuggestions = getDefaultDistrictSuggestions(REGION_CODE);
+
+function isValidEnrollmentDistrict(value: string) {
+  const district = canonicalizeDistrictName(value, districtSuggestions);
+  return isRecognizedDistrictName(district, districtSuggestions);
+}
 const identityProofOptions = [...IDENTITY_PROOF_TYPES];
 const maritalStatuses = [...MARITAL_STATUSES];
 const educationOptions = [...EDUCATION_OPTIONS];
@@ -1450,18 +1457,18 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   };
 
   async function onSubmit(data: EnrollmentFormValues) {
-    setIsLoading(true);
-    toast({ title: "Processing Registration...", description: "Please wait. This may take a moment." });
-
     const district = canonicalizeDistrictName(data.district, districtSuggestions);
-    if (!isRecognizedDistrictName(district, districtSuggestions)) {
+    if (!isValidEnrollmentDistrict(district)) {
       form.setError("district", {
         type: "manual",
         message: "Please choose a valid district for this region.",
       });
-      setIsLoading(false);
+      handleInvalidSubmission();
       return;
     }
+
+    setIsLoading(true);
+    toast({ title: "Processing Registration...", description: "Please wait. This may take a moment." });
 
     const phoneNumber = data.phoneNumber.replace(/\D/g, "");
     const isLngEnrollment = isLngClientName(data.clientName);

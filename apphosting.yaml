@@ -1,7 +1,62 @@
 # Settings to manage and configure a Firebase App Hosting backend.
 # https://firebase.google.com/docs/app-hosting/configure
+#
+# This backend serves the Kerala (KL) region. Each additional state runs its own
+# backend with its own REGION_CODE/REGION_NAME and Firebase project.
 
 runConfig:
-  # Increase this value if you'd like to automatically spin up
-  # more instances in response to increased traffic.
-  maxInstances: 1
+  minInstances: 0
+  maxInstances: 2
+  concurrency: 20
+  cpu: 1
+  memoryMiB: 1024
+
+env:
+  # Publish the release APK to Cloud Storage during the build and serve it
+  # through /api/public/download/android/file instead of bundling it in the
+  # image. App Hosting ignores Vercel rewrites, so this replaces them.
+  - variable: CISS_REDIRECT_ANDROID_APK
+    value: "true"
+    availability: [BUILD]
+
+  # Secrets held in Secret Manager. Runtime only.
+  - variable: OPENCAGE_API_KEY
+    secret: OPENCAGE_API_KEY
+    availability: [RUNTIME]
+  - variable: GEMINI_API_KEY
+    secret: GEMINI_API_KEY
+    availability: [RUNTIME]
+  - variable: REGION_CONNECTIONS_SECRET
+    secret: REGION_CONNECTIONS_SECRET
+    availability: [RUNTIME]
+
+  # Region identity for this deployment.
+  - variable: APP_MODE
+    value: "regional"
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_APP_MODE
+    value: "regional"
+    availability: [BUILD, RUNTIME]
+  - variable: REGION_CODE
+    value: "KL"
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_REGION_CODE
+    value: "KL"
+    availability: [BUILD, RUNTIME]
+  - variable: REGION_NAME
+    value: "Kerala"
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_REGION_NAME
+    value: "Kerala"
+    availability: [BUILD, RUNTIME]
+  - variable: GUARD_AUTH_EMAIL_DOMAIN
+    value: "guard.cisskerala.app"
+    availability: [RUNTIME]
+
+  # Identity used by the super-admin region control plane.
+  - variable: SUPER_ADMIN_EMAIL
+    value: "admin@cisskerala.app"
+    availability: [RUNTIME]
+  - variable: NEXT_PUBLIC_SUPER_ADMIN_EMAIL
+    value: "admin@cisskerala.app"
+    availability: [BUILD, RUNTIME]

@@ -177,9 +177,8 @@ export default function LandingPage({
     localStorage.setItem("pwaInstallDismissed", "1");
   };
 
-  const handleQrScan = async (text: string) => {
-    const employeeId = parseEmployeeIdFromQrText(text);
-    if (!employeeId) {
+  const handleQrScan = (text: string) => {
+    if (!parseEmployeeIdFromQrText(text)) {
       toast({
         variant: "destructive",
         title: "Invalid QR",
@@ -189,25 +188,13 @@ export default function LandingPage({
     }
 
     try {
-      const res = await fetch(`/api/public/attendance/employee?employeeId=${encodeURIComponent(employeeId)}`, {
-        cache: "no-store",
-      });
-      const data = await res.json();
-      if (data.found) {
-        toast({ title: "Employee found", description: "Opening attendance..." });
-        router.push(`/attendance?employeeId=${encodeURIComponent(employeeId)}`);
-      } else {
-        toast({
-          variant: "destructive",
-          title: "Unknown QR Code",
-          description: "This employee was not found. Try entering your phone number.",
-        });
-      }
-    } catch (error: any) {
+      sessionStorage.setItem("ciss-attendance-badge", text);
+      router.push("/attendance?scan=badge");
+    } catch {
       toast({
         variant: "destructive",
         title: "Lookup Failed",
-        description: error?.message || "Could not verify employee from QR code.",
+        description: "Open attendance and scan the badge there.",
       });
     }
   };
@@ -249,8 +236,8 @@ export default function LandingPage({
       const data = (await response.json()) as { found: boolean };
 
       if (data.found) {
-        toast({ title: "Welcome!", description: "Opening attendance..." });
-        router.push(`/attendance?phoneNumber=${encodeURIComponent(normalizedPhone)}`);
+        sessionStorage.setItem("ciss-attendance-phone", normalizedPhone);
+        router.push("/guard-login?attendance=1");
       } else {
         toast({ title: "New User", description: "Redirecting to enrollment form." });
         if (typeof window !== "undefined") {

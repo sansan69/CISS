@@ -23,7 +23,8 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
-import { useAppAuth } from '@/context/auth-context';
+import { onIdTokenChanged, type User } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -146,7 +147,24 @@ function buildLocationAccessError(error: GeolocationPositionError) {
 
 export default function AttendancePage() {
   const router = useRouter();
-  const { user, userRole } = useAppAuth();
+  const [user, setUser] = useState<User | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const userRole = user ? 'guard' : null;
+
+  // This public route sits outside both the staff and guard layouts.
+  useEffect(() => {
+    let active = true;
+    const unsubscribe = onIdTokenChanged(auth, async (currentUser) => {
+      const token = await currentUser?.getIdTokenResult().catch(() => null);
+      if (!active || auth.currentUser !== currentUser) return;
+      setUser(token?.claims.role === 'guard' ? currentUser : null);
+      setAuthReady(true);
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, []);
   const [workflowStep, setWorkflowStep] = useState<'idle' | 'scanning' | 'review' | 'photo' | 'done'>('idle');
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
@@ -948,16 +966,18 @@ export default function AttendancePage() {
   );
 
   useEffect(() => {
+    if (!authReady) return;
     const query =
       typeof window === 'undefined'
         ? null
         : new URLSearchParams(window.location.search);
     const prefilledEmployeeId = query?.get('employeeId')?.trim() || '';
     const prefilledPhoneNumber = query?.get('phoneNumber')?.trim() || '';
+    const hasScannedBadge = query?.get('scan') === 'badge';
     const shouldLoadAuthenticatedGuard = userRole === 'guard' && Boolean(user);
 
     if (
-      (!prefilledEmployeeId && !prefilledPhoneNumber && !shouldLoadAuthenticatedGuard) ||
+      (!hasScannedBadge && !prefilledEmployeeId && !prefilledPhoneNumber && !shouldLoadAuthenticatedGuard) ||
       scannedEmployee ||
       workflowStep !== 'idle'
     ) {
@@ -972,11 +992,15 @@ export default function AttendancePage() {
       setManualPhone(prefilledPhoneNumber);
 
       try {
-        const employee = shouldLoadAuthenticatedGuard
-          ? await identifyGuard('authenticated')
-          : prefilledPhoneNumber
-            ? await identifyGuard('phone', prefilledPhoneNumber)
-            : await fetchEmployeeByEmployeeId(prefilledEmployeeId);
+        const scannedBadge = hasScannedBadge ? sessionStorage.getItem('ciss-attendance-badge') : null;
+        if (hasScannedBadge && !scannedBadge) throw new Error('Scan your badge again to continue.');
+        const employee = scannedBadge
+          ? await identifyGuard('qr', scannedBadge)
+          : shouldLoadAuthenticatedGuard
+            ? await identifyGuard('authenticated')
+            : prefilledPhoneNumber
+              ? await identifyGuard('phone', prefilledPhoneNumber)
+              : await fetchEmployeeByEmployeeId(prefilledEmployeeId);
         if (!employee) {
           if (!cancelled) {
             toast({
@@ -993,9 +1017,11 @@ export default function AttendancePage() {
 
         setScannedEmployee(employee);
         setScanResult(
-          shouldLoadAuthenticatedGuard
-            ? 'Authenticated guard account'
-            : `Profile:${prefilledEmployeeId || 'phone'}`,
+          scannedBadge
+            ? 'QR badge'
+            : shouldLoadAuthenticatedGuard
+              ? 'Authenticated guard account'
+              : `Profile:${prefilledEmployeeId || 'phone'}`,
         );
         setHasScanned(true);
         setReportingStartedAt(new Date().toISOString());
@@ -1045,7 +1071,10 @@ export default function AttendancePage() {
           router.replace('/attendance', { scroll: false });
         }
       } finally {
-        if (!cancelled) setIsPrefillingEmployee(false);
+        if (!cancelled) {
+          if (hasScannedBadge) sessionStorage.removeItem('ciss-attendance-badge');
+          setIsPrefillingEmployee(false);
+        }
       }
     };
 
@@ -1055,6 +1084,7 @@ export default function AttendancePage() {
       cancelled = true;
     };
   }, [
+    authReady,
     fetchEmployeeByEmployeeId,
     getDeviceLocation,
     identifyGuard,

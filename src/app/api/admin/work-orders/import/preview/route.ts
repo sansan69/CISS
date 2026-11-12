@@ -544,6 +544,13 @@ export async function POST(request: Request) {
       });
     }
     const rawParseResult = combineParsedFiles(parsedFiles);
+    if (rawParseResult.rows.length === 0) {
+      const warning = rawParseResult.warnings[0]?.message;
+      return NextResponse.json(
+        { error: `No duty rows were found in the uploaded files. ${warning || "Check the worksheet headers and exam date, then preview again."}` },
+        { status: 400 },
+      );
+    }
     const effectiveExamCode =
       mode === "revision"
         ? targetExamCode || rawParseResult.suggestedExamCode

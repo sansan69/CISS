@@ -114,7 +114,10 @@ export function buildRateLimitKey(
   endpoint: string,
   identifier: string,
 ): string {
-  return `${endpoint}:${identifier}`;
+  // Firestore interprets slashes as path separators. Keep existing counters
+  // for ordinary identifiers and escape percent signs to avoid collisions.
+  const documentIdentifier = identifier.replace(/%/g, "%25").replace(/\//g, "%2F");
+  return `${endpoint}:${documentIdentifier}`;
 }
 
 /**

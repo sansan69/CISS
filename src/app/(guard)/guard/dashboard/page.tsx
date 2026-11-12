@@ -343,7 +343,7 @@ export default function GuardDashboardPage() {
       </Card>
 
       <Link
-        href={`/attendance?employeeId=${encodeURIComponent(data.employeeId)}`}
+        href="/attendance"
         className="block animate-slide-up stagger-4"
       >
         <div

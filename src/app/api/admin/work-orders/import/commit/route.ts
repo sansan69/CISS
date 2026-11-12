@@ -856,7 +856,15 @@ function buildWorkOrderWrites(
 export async function POST(request: Request) {
   try {
     const adminUser = await requireAdmin(request);
-    const payload = validatePayload(await request.json());
+    let payload: TcsExamImportCommitPayload;
+    try {
+      payload = validatePayload(await request.json().catch(() => null));
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Invalid work-order import." },
+        { status: 400 },
+      );
+    }
     const mode = normalizeMode(payload.mode);
     const normalizedTargetExamCode = String(payload.targetExamCode ?? payload.examCode ?? "")
       .replace(/\s+/g, " ")

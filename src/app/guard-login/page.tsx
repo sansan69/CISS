@@ -44,10 +44,22 @@ export default function GuardLoginPage() {
   const [phoneStep, setPhoneStep] = useState<PhoneStep>("phone");
   const [rememberPhone, setRememberPhone] = useState(true);
   const pinInputRef = useRef<HTMLInputElement>(null);
+  const [returnToAttendance, setReturnToAttendance] = useState(false);
 
   React.useEffect(() => {
+    const attendance = new URLSearchParams(window.location.search).get("attendance") === "1";
+    setReturnToAttendance(attendance);
+    if (attendance) {
+      const phone = sessionStorage.getItem("ciss-attendance-phone");
+      sessionStorage.removeItem("ciss-attendance-phone");
+      if (phone && /^\d{10}$/.test(phone)) {
+        setPhoneNumber(phone);
+        setPhoneStep("pin");
+        return;
+      }
+    }
     const saved = localStorage.getItem("guard_remembered_phone");
-    if (saved) setPhoneNumber(saved);
+    if (saved) setPhoneNumber((current) => current || saved);
   }, []);
 
   const [qrStep, setQrStep] = useState<"scan" | "pin">("scan");
@@ -110,7 +122,7 @@ export default function GuardLoginPage() {
       }
 
       toast({ title: `Welcome, ${data.employeeName ?? "Guard"}!` });
-      window.location.replace("/guard/dashboard");
+      window.location.replace(returnToAttendance ? "/attendance" : "/guard/dashboard");
     } catch {
       toast({
         variant: "destructive",
@@ -250,7 +262,7 @@ export default function GuardLoginPage() {
       }
       await signInWithCustomToken(auth, data.token as string);
       toast({ title: `Welcome, ${data.employeeName ?? "Guard"}!` });
-      window.location.replace("/guard/dashboard");
+      window.location.replace(returnToAttendance ? "/attendance" : "/guard/dashboard");
     } catch {
       toast({
         variant: "destructive",

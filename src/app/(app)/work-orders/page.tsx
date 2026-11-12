@@ -908,7 +908,7 @@ export default function WorkOrderPage() {
     };
 
     const handleConfirmImport = async () => {
-        if (files.length === 0 || !importPreview) {
+        if (files.length === 0 || !importPreview?.rows.length) {
             toast({ variant: 'destructive', title: 'Preview required', description: 'Preview the selected files before confirming the import.' });
             return;
         }
@@ -1309,7 +1309,7 @@ export default function WorkOrderPage() {
                                     </Button>
                                     <Button
                                         onClick={handleConfirmImport}
-                                        disabled={isPreviewing || isConfirmingImport || files.length === 0 || !importPreview || (
+                                        disabled={isPreviewing || isConfirmingImport || files.length === 0 || !importPreview?.rows.length || (
                                             importPreview.duplicateState !== 'none' &&
                                             !(importMode === 'revision' || duplicateResolution === 'replace' || duplicateResolution === 'omit')
                                         )}
