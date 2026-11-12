@@ -65,3 +65,27 @@ env:
   - variable: NEXT_PUBLIC_SUPER_ADMIN_EMAIL
     value: "admin@cisskerala.app"
     availability: [BUILD, RUNTIME]
+
+  # Firebase web config. NEXT_PUBLIC_* values are inlined into the client
+  # bundle at build time and the Admin SDK reads the bucket at runtime.
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: "AIzaSyD_oZTSoD5P7KukyR90097fnNFvIVcdISs"
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: "ciss-workforce.firebaseapp.com"
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: "ciss-workforce"
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: "ciss-workforce.firebasestorage.app"
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "1041149201339"
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: "1:1041149201339:web:d8bc8ce567b2f0955b929e"
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+    value: "G-D1EK2DELHD"
+    availability: [BUILD, RUNTIME]
