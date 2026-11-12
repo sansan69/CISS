@@ -105,6 +105,23 @@ export function parseGuardEmployeeIdInput(value: unknown): string | null {
   return trimmed;
 }
 
+/**
+ * Every stored spelling an employee id may have been written with.
+ *
+ * Employee ids are stored uppercase (for example `CISS/TCS/2026-27/361`), but
+ * guards read them off badges and screens that render them lowercased and type
+ * them back in whatever case they saw. Firestore equality is case-sensitive, so
+ * an exact-match lookup rejected correct credentials with the same generic
+ * message as a wrong PIN. Look the id up in every casing instead.
+ */
+export function guardEmployeeIdCandidates(value: string): string[] {
+  const exact = value.trim();
+  if (!exact) return [];
+
+  const candidates = [exact, exact.toUpperCase(), exact.toLowerCase()];
+  return [...new Set(candidates)];
+}
+
 export function normalizeGuardDob(value: unknown): string {
   if (!value) {
     return "";

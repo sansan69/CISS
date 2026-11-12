@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { mirrorGuardPin } from "@/lib/server/guard-credentials";
 import {
   guardDobMatches,
+  guardEmployeeIdCandidates,
   parseGuardEmployeeIdInput,
   parseGuardPhoneInput,
 } from "@/lib/guard/identity-utils";
@@ -131,6 +132,19 @@ export async function POST(request: Request) {
     const identityVerificationFailed = () =>
       NextResponse.json({ error: AUTH_FAILURE_MESSAGE }, { status: 401 });
 
+    // The response is deliberately identical for every rejection so this
+    // unauthenticated endpoint cannot be used to discover which part of an
+    // identity is correct. The reason is logged instead, because the screen
+    // cannot show it and support cannot otherwise tell these cases apart.
+    const rejectIdentity = (reason: string, employeeDocId?: string) => {
+      console.warn(
+        `[guard/setup-pin] identity rejected reason=${reason}${
+          employeeDocId ? ` employeeDoc=${employeeDocId}` : ""
+        }`,
+      );
+      return identityVerificationFailed();
+    };
+
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const { FieldValue } = await import("firebase-admin/firestore");
 
@@ -138,16 +152,19 @@ export async function POST(request: Request) {
     // silently fall back to the other: doing so would let an unknown employee
     // ID be masked by a valid phone number.
     const employeesRef = adminDb.collection("employees");
+    const employeeIdCandidates = normalizedEmployeeId
+      ? guardEmployeeIdCandidates(normalizedEmployeeId)
+      : [];
     let employeeIdQuery = null;
-    if (normalizedEmployeeId) {
+    if (employeeIdCandidates.length > 0) {
       employeeIdQuery = await employeesRef
-        .where("employeeId", "==", normalizedEmployeeId)
+        .where("employeeId", "in", employeeIdCandidates)
         .limit(1)
         .get();
 
       if (employeeIdQuery.empty) {
         employeeIdQuery = await employeesRef
-          .where("legacyUniqueId", "==", normalizedEmployeeId)
+          .where("legacyUniqueId", "in", employeeIdCandidates)
           .limit(1)
           .get();
       }
@@ -157,12 +174,18 @@ export async function POST(request: Request) {
       .limit(1)
       .get();
 
-    if (
-      phoneQuery.empty ||
-      (employeeIdQuery?.empty ?? false) ||
-      (employeeIdQuery && employeeIdQuery.docs[0].id !== phoneQuery.docs[0].id)
-    ) {
-      return identityVerificationFailed();
+    if (phoneQuery.empty) {
+      // Fingerprint rather than the number itself: enough to correlate a
+      // support case, not enough to leak a guard's phone number into logs.
+      return rejectIdentity(
+        `phone_not_found:${identifierFingerprint(`phone:${normalizedPhone}`)}`,
+      );
+    }
+    if (employeeIdQuery?.empty ?? false) {
+      return rejectIdentity("employee_id_not_found", phoneQuery.docs[0].id);
+    }
+    if (employeeIdQuery && employeeIdQuery.docs[0].id !== phoneQuery.docs[0].id) {
+      return rejectIdentity("identifier_mismatch", phoneQuery.docs[0].id);
     }
 
     const empDoc = employeeIdQuery?.docs[0] ?? phoneQuery.docs[0];
@@ -171,15 +194,15 @@ export async function POST(request: Request) {
       .trim()
       .toLowerCase();
     if (employeeStatus !== "active") {
-      return identityVerificationFailed();
+      return rejectIdentity("inactive", empDoc.id);
     }
 
     if (!guardDobMatches(empData.dateOfBirth, dateOfBirth)) {
-      return identityVerificationFailed();
+      return rejectIdentity("dob_mismatch", empDoc.id);
     }
 
     if (empData.guardPin || empData.guardAuthUid) {
-      return identityVerificationFailed();
+      return rejectIdentity("already_configured", empDoc.id);
     }
 
     // Hash before reserving so the transaction remains short. The reservation

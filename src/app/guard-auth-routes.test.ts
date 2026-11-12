@@ -8,7 +8,7 @@ import {
   verifyPinWithMetadata,
 } from "../lib/guard/pin-utils";
 
-type Filter = { field: string; op: "==" | ">=" | "<="; value: unknown };
+type Filter = { field: string; op: "==" | ">=" | "<=" | "in"; value: unknown };
 
 const deleteSentinel = { __op: "delete" } as const;
 const serverTimestampSentinel = { __op: "serverTimestamp" } as const;
@@ -280,6 +280,10 @@ function matchFilter(data: Record<string, unknown>, filter: Filter) {
   switch (filter.op) {
     case "==":
       return actual === filter.value;
+    case "in":
+      return (
+        Array.isArray(filter.value) && filter.value.some((value) => value === actual)
+      );
     default:
       return false;
   }
@@ -1078,6 +1082,133 @@ describe("guard auth routes", () => {
         guardFailedAttempts: 0,
       }),
     );
+  });
+
+  it("accepts a guard id typed in a different case than it is stored", async () => {
+    const adminDb = new FakeFirestore();
+    adminDb.seed("employees", "emp-case", {
+      employeeId: "CISS/TCS/2026-27/361",
+      phoneNumber: "9123456780",
+      name: "Guard Case",
+      dateOfBirth: {
+        toDate() {
+          return new Date("1991-05-30T18:30:00.000Z");
+        },
+      },
+    });
+
+    const createUser = vi.fn().mockResolvedValue({ uid: "guard-uid-case" });
+    const setCustomUserClaims = vi.fn().mockResolvedValue(undefined);
+
+    vi.doMock("@/lib/firebaseAdmin", () => ({
+      db: adminDb,
+      auth: { createUser, setCustomUserClaims },
+    }));
+    vi.doMock(
+      "@/lib/guard/identity-utils",
+      async () => await import("../lib/guard/identity-utils"),
+    );
+    vi.doMock(
+      "@/lib/guard/pin-utils",
+      async () => await import("../lib/guard/pin-utils"),
+    );
+    vi.doMock("@/lib/runtime-config", () => ({
+      GUARD_AUTH_EMAIL_DOMAIN: "guard.cisskerala.app",
+      REGION_CODE: "KL",
+    }));
+    vi.doMock("firebase-admin/firestore", () => ({
+      Timestamp: {
+        now: () => ({ toDate: () => new Date() }),
+        fromDate: (date: Date) => ({ toDate: () => date }),
+      },
+      FieldValue: {
+        serverTimestamp: () => serverTimestampSentinel,
+        delete: () => deleteSentinel,
+      },
+    }));
+
+    const { POST } = await import("./api/guard/auth/setup-pin/route");
+    const response = await POST(
+      new Request("https://cisskerala.app/api/guard/auth/setup-pin", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          // Badges and screens render the id lowercased; the record is uppercase.
+          employeeId: "ciss/tcs/2026-27/361",
+          phoneNumber: "9123456780",
+          dateOfBirth: "1991-05-31",
+          pin: "1234",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(createUser).toHaveBeenCalledOnce();
+    expect(adminDb.getDoc("employees", "emp-case")).toEqual(
+      expect.objectContaining({ guardAuthUid: "guard-uid-case" }),
+    );
+  });
+
+  it("still rejects a case variant belonging to a different employee", async () => {
+    const adminDb = new FakeFirestore();
+    adminDb.seed("employees", "emp-a", {
+      employeeId: "CISS/TCS/2026-27/361",
+      phoneNumber: "9123456780",
+      dateOfBirth: "1991-05-31",
+    });
+    adminDb.seed("employees", "emp-b", {
+      employeeId: "CISS/TCS/2026-27/999",
+      phoneNumber: "9123456799",
+      dateOfBirth: "1991-05-31",
+    });
+
+    const createUser = vi.fn().mockResolvedValue({ uid: "guard-uid-x" });
+    const setCustomUserClaims = vi.fn().mockResolvedValue(undefined);
+
+    vi.doMock("@/lib/firebaseAdmin", () => ({
+      db: adminDb,
+      auth: { createUser, setCustomUserClaims },
+    }));
+    vi.doMock(
+      "@/lib/guard/identity-utils",
+      async () => await import("../lib/guard/identity-utils"),
+    );
+    vi.doMock(
+      "@/lib/guard/pin-utils",
+      async () => await import("../lib/guard/pin-utils"),
+    );
+    vi.doMock("@/lib/runtime-config", () => ({
+      GUARD_AUTH_EMAIL_DOMAIN: "guard.cisskerala.app",
+      REGION_CODE: "KL",
+    }));
+    vi.doMock("firebase-admin/firestore", () => ({
+      Timestamp: {
+        now: () => ({ toDate: () => new Date() }),
+        fromDate: (date: Date) => ({ toDate: () => date }),
+      },
+      FieldValue: {
+        serverTimestamp: () => serverTimestampSentinel,
+        delete: () => deleteSentinel,
+      },
+    }));
+
+    const { POST } = await import("./api/guard/auth/setup-pin/route");
+    const response = await POST(
+      new Request("https://cisskerala.app/api/guard/auth/setup-pin", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          // Employee B's id, but employee A's phone number.
+          employeeId: "ciss/tcs/2026-27/999",
+          phoneNumber: "9123456780",
+          dateOfBirth: "1991-05-31",
+          pin: "1234",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(401);
+    expect(createUser).not.toHaveBeenCalled();
   });
 
   it("denies setup PIN by IP before parsing the body or looking up an employee", async () => {

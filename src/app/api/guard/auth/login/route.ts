@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  guardEmployeeIdCandidates,
   parseGuardEmployeeIdInput,
   parseGuardPhoneInput,
 } from "@/lib/guard/identity-utils";
@@ -191,17 +192,20 @@ export async function POST(request: Request) {
     // Resolve supplied identifiers independently. A request that includes both
     // must refer to one employee; selecting by either would permit identity mixups.
     const employeesRef = adminDb.collection("employees");
+    const employeeIdCandidates = normalizedEmployeeId
+      ? guardEmployeeIdCandidates(normalizedEmployeeId)
+      : [];
     let employeeIdQuery;
 
-    if (normalizedEmployeeId) {
+    if (employeeIdCandidates.length > 0) {
       employeeIdQuery = await employeesRef
-        .where("employeeId", "==", normalizedEmployeeId)
+        .where("employeeId", "in", employeeIdCandidates)
         .limit(1)
         .get();
 
       if (employeeIdQuery.empty) {
         employeeIdQuery = await employeesRef
-          .where("legacyUniqueId", "==", normalizedEmployeeId)
+          .where("legacyUniqueId", "in", employeeIdCandidates)
           .limit(1)
           .get();
       }

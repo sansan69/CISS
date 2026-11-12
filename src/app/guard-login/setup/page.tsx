@@ -19,6 +19,7 @@ export default function GuardSetupPage() {
   const [employeeId, setEmployeeId] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
+  const [failureHelp, setFailureHelp] = useState(false);
 
   // Step 2 fields
   const [pin, setPin] = useState("");
@@ -57,11 +58,17 @@ export default function GuardSetupPage() {
       const data = await res.json();
 
       if (!res.ok) {
+        // The API answers every identity failure with the same message on
+        // purpose, so it cannot be used to discover which detail was wrong.
+        // Offer the two things that actually resolve most of them.
         toast({
           variant: "destructive",
           title: "Setup Failed",
-          description: data.error ?? "Could not set up PIN.",
+          description:
+            data.error ?? "Could not set up PIN.",
+          duration: 8000,
         });
+        setFailureHelp(true);
         return;
       }
 
@@ -225,6 +232,34 @@ export default function GuardSetupPage() {
                   Go to Login
                 </Link>
               </p>
+            )}
+
+            {failureHelp && (
+              <div
+                role="status"
+                className="mt-4 rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground"
+              >
+                <p className="font-medium text-foreground">
+                  If this keeps failing
+                </p>
+                <ul className="mt-2 list-disc space-y-1 pl-4">
+                  <li>
+                    If you already chose a PIN, use{" "}
+                    <Link href="/guard-login" className="font-medium underline">
+                      Go to Login
+                    </Link>{" "}
+                    instead of setting it up again.
+                  </li>
+                  <li>
+                    Use the same phone number and date of birth your supervisor
+                    recorded for you. Either one being different will fail.
+                  </li>
+                  <li>
+                    Still stuck? Ask your supervisor to check your date of birth
+                    and phone number on your employee record.
+                  </li>
+                </ul>
+              </div>
             )}
           </CardContent>
         </Card>
