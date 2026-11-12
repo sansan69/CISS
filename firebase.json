@@ -2,7 +2,8 @@
 {
   "apphosting": {
     "backendId": "ciss-workforce",
-    "rootDir": "/"
+    "rootDir": "/",
+    "ignore": ["node_modules", ".git", "**/public/downloads/*.apk"]
   },
   "firestore": {
     "rules": "firestore.rules",

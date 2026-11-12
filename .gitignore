@@ -59,6 +59,10 @@ streamvault/
 .next.stale.*/
 .env*.local
 ciss-workforce.apk
+# Release APKs are published to Cloud Storage by scripts/prepare-android-apk.mjs
+# during the build and served through /api/public/download/android/file. Keeping
+# them in the repo pushed the deploy archive past the App Hosting upload limit.
+public/downloads/*.apk
 zilliz-cloud-Free-01-username-password.txt
 public/releases/
 

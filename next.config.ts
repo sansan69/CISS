@@ -13,7 +13,6 @@ const apkContentType = {
 const noStore = { key: "Cache-Control", value: "no-store, max-age=0" };
 const redirectAndroidApk = process.env.CISS_REDIRECT_ANDROID_APK === "true";
 const androidStreamRoute = "/api/public/download/android/file";
-const previousAndroidApk = "/downloads/ciss-workforce-1.0.21.apk";
 
 // Build-time check that NEXT_PUBLIC_FIREBASE_* env vars are present
 const missingFirebaseVars = [
@@ -63,7 +62,6 @@ const nextConfig: NextConfig = {
         ? [
             ...aliases,
             { source: androidRelease.apkPath, destination: androidStreamRoute },
-            { source: previousAndroidApk, destination: `${androidStreamRoute}/legacy` },
           ]
         : aliases,
     };
