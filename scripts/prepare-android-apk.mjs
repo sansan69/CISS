@@ -80,35 +80,61 @@ if (!manifest.apkUrl && manifest.apkPath.startsWith("/")) {
   } else {
     console.log(`Verified Android APK ${version}`);
     if (process.env.CISS_REDIRECT_ANDROID_APK === "true") {
-    const { applicationDefault, initializeApp } = await import("firebase-admin/app");
-    const { getStorage } = await import("firebase-admin/storage");
-    const app = initializeApp({ credential: applicationDefault() });
-    const bucket = getStorage(app).bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET);
-    const destination = `releases/ciss-workforce-${version}.apk`;
-    try {
       try {
-        await bucket.upload(apk, {
-          destination,
-          preconditionOpts: { ifGenerationMatch: 0 },
-          metadata: {
-            contentType: "application/vnd.android.package-archive",
-            contentDisposition: `attachment; filename="ciss-workforce-${version}.apk"`,
-            cacheControl: "public, max-age=31536000, immutable",
-            metadata: { firebaseStorageDownloadTokens: randomUUID(), sha256: manifest.sha256 },
-          },
-        });
+        const { applicationDefault, getApps, initializeApp } = await import("firebase-admin/app");
+        const { getStorage } = await import("firebase-admin/storage");
+        const app = getApps()[0] ?? initializeApp({ credential: applicationDefault() });
+        const projectId =
+          process.env.GOOGLE_CLOUD_PROJECT ||
+          process.env.GCLOUD_PROJECT ||
+          process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+        const bucketName =
+          process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ||
+          process.env.FIREBASE_STORAGE_BUCKET ||
+          (projectId ? `${projectId}.firebasestorage.app` : undefined);
+        if (!bucketName) {
+          throw new Error("no storage bucket is configured for this build");
+        }
+        const bucket = getStorage(app).bucket(bucketName);
+        const destination = `releases/ciss-workforce-${version}.apk`;
+        let uploaded = false;
+        try {
+          await bucket.upload(apk, {
+            destination,
+            preconditionOpts: { ifGenerationMatch: 0 },
+            metadata: {
+              contentType: "application/vnd.android.package-archive",
+              contentDisposition: `attachment; filename="ciss-workforce-${version}.apk"`,
+              cacheControl: "public, max-age=31536000, immutable",
+              metadata: { firebaseStorageDownloadTokens: randomUUID(), sha256: manifest.sha256 },
+            },
+          });
+          uploaded = true;
+        } catch (error) {
+          // 412 means the object already exists; anything else is handled below.
+          if (Number(error.code) === 412) uploaded = true;
+          else throw error;
+        }
+        if (uploaded) {
+          const [metadata] = await bucket.file(destination).getMetadata();
+          if (
+            Number(metadata.size) !== manifest.sizeBytes ||
+            metadata.metadata?.sha256 !== manifest.sha256
+          ) {
+            // Never publish an object that does not match the manifest.
+            throw new Error("Existing Firebase Storage APK does not match the release manifest");
+          }
+          console.log(`Verified Firebase Storage APK ${version}`);
+        }
       } catch (error) {
-        if (Number(error.code) !== 412) throw error;
+        // Publishing is an optimization: the download route already falls back
+        // to the GitHub release URL, so it must never fail the deployment.
+        console.warn(
+          `Could not publish the APK to Cloud Storage (${
+            error instanceof Error ? error.message : String(error)
+          }); the download route will use the GitHub release URL`,
+        );
       }
-      const [metadata] = await bucket.file(destination).getMetadata();
-      if (Number(metadata.size) !== manifest.sizeBytes || metadata.metadata?.sha256 !== manifest.sha256) {
-        throw new Error("Existing Firebase Storage APK does not match the release manifest");
-      }
-      console.log(`Verified Firebase Storage APK ${version}`);
-    } catch (error) {
-      if (Number(error.code) !== 403) throw error;
-      console.warn("Build account cannot publish the APK to Firebase Storage");
     }
-  }
   }
 }

@@ -18,6 +18,11 @@ env:
   - variable: CISS_REDIRECT_ANDROID_APK
     value: "true"
     availability: [BUILD]
+  # The build step uploads the APK before the runtime config exists, so name the
+  # bucket explicitly. Same bucket FIREBASE_CONFIG reports at runtime.
+  - variable: FIREBASE_STORAGE_BUCKET
+    value: "ciss-workforce.firebasestorage.app"
+    availability: [BUILD, RUNTIME]
 
   # Secrets held in Secret Manager. Runtime only.
   - variable: OPENCAGE_API_KEY
